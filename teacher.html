@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>교사용 대시보드 · 우리 반 체크리스트</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body class="teacher">
@@ -31,10 +33,10 @@
       <nav class="tabs">
         <button class="tab active" data-tab="home">홈</button>
         <button class="tab" data-tab="check">학생별 체크</button>
-        <button class="tab" data-tab="manage">항목 관리</button>
-        <button class="tab" data-tab="stats">통계</button>
         <button class="tab" data-tab="cert">자격증</button>
         <button class="tab" data-tab="credit">신용도</button>
+        <button class="tab" data-tab="manage">항목 관리</button>
+        <button class="tab" data-tab="stats">통계</button>
       </nav>
       <button id="logout" class="btn ghost small">로그아웃</button>
     </header>
@@ -50,19 +52,19 @@
         <div class="summary-grid">
           <div class="summary-card" data-kind="homework">
             <div class="summary-label">오늘 숙제 제출률</div>
-            <div class="summary-rate" id="sum-homework">–</div>
+            <div class="summary-rate" id="sum-homework">-</div>
             <div class="summary-sub" id="sum-homework-sub">항목 없음</div>
             <div class="bar"><span id="bar-homework"></span></div>
           </div>
           <div class="summary-card" data-kind="notice">
             <div class="summary-label">가정통신문 회수율</div>
-            <div class="summary-rate" id="sum-notice">–</div>
+            <div class="summary-rate" id="sum-notice">-</div>
             <div class="summary-sub" id="sum-notice-sub">진행 중인 통신문 없음</div>
             <div class="bar"><span id="bar-notice"></span></div>
           </div>
           <div class="summary-card" data-kind="duty">
             <div class="summary-label">이번 주 1인 1역 완료율</div>
-            <div class="summary-rate" id="sum-duty">–</div>
+            <div class="summary-rate" id="sum-duty">-</div>
             <div class="summary-sub" id="sum-duty-sub">배정 없음</div>
             <div class="bar"><span id="bar-duty"></span></div>
           </div>
@@ -259,6 +261,7 @@
         <ul class="rule-list">
           <li><span class="pt plus">+1</span> 숙제를 마감일까지 제출</li>
           <li><span class="pt plus">+1</span> 가정통신문을 마감일까지 회수</li>
+          <li><span class="pt minus">−2</span> 숙제를 마감일이 지나서 냄 (또는 지금까지 미제출)</li>
           <li><span class="pt minus">−2</span> 가정통신문을 마감일이 지나서 냄 (또는 지금까지 미회수)</li>
           <li><span class="pt minus">−2</span> 그 주가 끝났는데 1인 1역 미완료</li>
         </ul>

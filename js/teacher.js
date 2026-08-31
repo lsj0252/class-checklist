@@ -26,8 +26,12 @@ const state = {
   baseScore: CREDIT.DEFAULT_BASE,
   checkDate: todayStr(),
   dutyWeek: weekStart(),
-  started: false
+  started: false,
+  loaded: { students: false, items: false, checks: false }
 };
+
+/** 첫 데이터가 도착하기 전에는 뼈대(skeleton)를 보여준다 */
+const isReady = () => state.loaded.students && state.loaded.items && state.loaded.checks;
 
 const col = {
   students: collection(db, 'students'),
@@ -82,11 +86,13 @@ function subscribe() {
     state.students = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.number ?? 0) - (b.number ?? 0) || a.name.localeCompare(b.name, 'ko'));
+    state.loaded.students = true;
     renderAll();
   }, onError('학생 명단'));
 
   onSnapshot(query(col.items), (snap) => {
     state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    state.loaded.items = true;
     renderAll();
   }, onError('항목'));
 
@@ -99,6 +105,7 @@ function subscribe() {
 
   onSnapshot(query(col.checks), (snap) => {
     state.checks = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+    state.loaded.checks = true;
     renderAll();
   }, onError('체크 기록'));
 
@@ -136,7 +143,7 @@ const homeworkOn = (date) =>
   state.items.filter((i) => i.type === TYPE.HOMEWORK && i.date === date)
     .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
 
-/** 진행 중인 통신문 – 마감이 임박한 순서로 정렬 (마감일 없으면 뒤로) */
+/** 진행 중인 통신문 - 마감이 임박한 순서로 정렬 (마감일 없으면 뒤로) */
 const openNotices = () =>
   state.items.filter((i) => i.type === TYPE.NOTICE && !i.closed)
     .sort((a, b) =>
@@ -268,6 +275,20 @@ function renderHome() {
   const week = weekStart(today);
   $('#home-date').textContent = dateLabel(today);
 
+  if (!isReady()) {
+    ['homework', 'notice', 'duty'].forEach((kind) => {
+      $(`#sum-${kind}`).innerHTML = '<span class="skeleton skeleton-rate"></span>';
+      $(`#sum-${kind}-sub`).innerHTML = '<span class="skeleton" style="width:120px"></span>';
+      $(`#bar-${kind}`).style.width = '0%';
+    });
+    $('#pending-list').innerHTML = [70, 55, 62].map((w) =>
+      `<div class="pending-item" style="border-color:var(--line);background:var(--surface-2)">
+         <div class="pending-summary"><span class="skeleton" style="width:${w}px"></span></div>
+       </div>`).join('');
+    $('#done-list').innerHTML = '';
+    return;
+  }
+
   const hw = homeworkOn(today);
   const nt = openNotices();
   const dt = dutiesOf(week);
@@ -286,7 +307,7 @@ function renderHome() {
 
   const paint = (kind, { done, total }, emptyText, unitText) => {
     const r = rate(done, total);
-    $(`#sum-${kind}`).textContent = r == null ? '–' : `${r}%`;
+    $(`#sum-${kind}`).textContent = r == null ? '-' : `${r}%`;
     $(`#sum-${kind}-sub`).textContent = total ? `${done} / ${total}${unitText}` : emptyText;
     $(`#bar-${kind}`).style.width = `${r ?? 0}%`;
   };
@@ -337,7 +358,7 @@ function renderHome() {
 }
 
 /* ═══════════ 학생별 체크 ═══════════ */
-/** 표의 열 정의 – 학생마다 다른 항목이 걸릴 수 있어 itemFor 로 매핑 */
+/** 표의 열 정의 - 학생마다 다른 항목이 걸릴 수 있어 itemFor 로 매핑 */
 function buildColumns() {
   const date = state.checkDate;
   const week = weekStart(date);
@@ -368,6 +389,18 @@ function buildColumns() {
 
 function renderCheck() {
   const table = $('#check-table');
+
+  if (!isReady()) {
+    $('#check-empty').hidden = true;
+    const cell = (w) => `<td><span class="skeleton" style="width:${w}px;margin:0 auto"></span></td>`;
+    table.innerHTML = `
+      <thead><tr><th class="col-student">학생</th><th></th><th></th><th></th></tr></thead>
+      <tbody>${Array.from({ length: 6 }, () => `
+        <tr><td class="col-student"><span class="skeleton" style="width:82px"></span></td>
+        ${cell(28)}${cell(28)}${cell(28)}</tr>`).join('')}</tbody>`;
+    return;
+  }
+
   const cols = buildColumns();
 
   if (!state.students.length || !cols.length) {
@@ -391,7 +424,7 @@ function renderCheck() {
   const body = state.students.map((s) => {
     const cells = cols.map((c, idx) => {
       const item = c.itemFor(s);
-      if (!item) return '<td class="cell na">–</td>';
+      if (!item) return '<td class="cell na">-</td>';
       const done = isDone(item.id, s.id);
       const label = c.type === TYPE.DUTY ? `${item.roleName}` : '';
       return `<td class="cell ${done ? 'done' : 'todo'}" data-col="${idx}" data-student="${s.id}"
@@ -708,7 +741,7 @@ function renderManage() {
   $('#duty-week-label').textContent = weekLabel(state.dutyWeek);
   $('#duty-assign').innerHTML = state.students.length ? state.students.map((s) => {
     const cur = dutyOfStudent(s.id, state.dutyWeek);
-    const opts = ['<option value="">— 없음 —</option>']
+    const opts = ['<option value="">없음</option>']
       .concat(state.roles.map((r) =>
         `<option value="${r.id}" ${cur?.roleId === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`))
       .join('');
@@ -900,7 +933,7 @@ function renderCredit() {
           <td colspan="6">
             ${events.length ? `<ul class="event-list">${events.slice(0, 40).map((ev) => `
               <li>
-                <span class="badge-muted">${ev.date ? shortDate(ev.date) : '–'}</span>
+                <span class="badge-muted">${ev.date ? shortDate(ev.date) : '-'}</span>
                 <span class="pt ${ev.points > 0 ? 'plus' : 'minus'}">${ev.points > 0 ? '+' : '−'}${Math.abs(ev.points)}</span>
                 <span class="grow">${escapeHtml(ev.reason)}</span>
               </li>`).join('')}</ul>` : '<p class="empty">아직 점수에 반영된 일이 없습니다.</p>'}
@@ -989,7 +1022,7 @@ function computeStats() {
 
 function rateCell({ done, total }) {
   const r = rate(done, total);
-  if (r == null) return '<td class="num">–</td>';
+  if (r == null) return '<td class="num">-</td>';
   const cls = r >= 90 ? 'rate-good' : r >= 70 ? 'rate-mid' : 'rate-low';
   return `<td class="num"><span class="${cls}">${r}%</span><span class="frac">${done}/${total}</span></td>`;
 }

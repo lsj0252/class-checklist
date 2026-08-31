@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  학생용 화면 – 이름 선택 로그인 + 내 현황 (읽기 전용)
+//  학생용 화면 - 이름 선택 로그인 + 내 현황 (읽기 전용)
 // ─────────────────────────────────────────────────────────────
 import {
   db, collection, doc, onSnapshot, query, where,
@@ -230,11 +230,12 @@ function renderCerts() {
     const earnedHtml = earned.length
       ? `<ul class="priv-earned">${earned.map((p) => `
           <li><span class="lv-tag lv-${p.level}">${p.level}급</span>${escapeHtml(p.text)}</li>`).join('')}</ul>`
-      : '<p class="priv-none">지금 급수에서 받는 특권은 아직 없어요.</p>';
+      : '<p class="priv-none">아직 받은 특권이 없어요. 급수를 올리면 특권이 생겨요.</p>';
 
+    // 아직 못 딴 급수의 특권 내용은 보여주지 않는다. 목표 급수만 알려준다.
     const nextHtml = next
-      ? `<p class="priv-next">🔒 다음 목표 <strong>${next.level}급</strong>${next.text ? ` — ${escapeHtml(next.text)}` : ''}</p>`
-      : '<p class="priv-next top">🎉 가장 높은 1급이에요!</p>';
+      ? `<p class="priv-next">다음 목표는 <strong>${next.level}급</strong>이에요.</p>`
+      : '<p class="priv-next top">가장 높은 1급이에요!</p>';
 
     return `
       <div class="cert-card">
@@ -262,7 +263,7 @@ function renderCredit() {
       <ul class="event-list">
         ${recent.map((ev) => `
           <li>
-            <span class="badge-muted">${ev.date ? shortDate(ev.date) : '–'}</span>
+            <span class="badge-muted">${ev.date ? shortDate(ev.date) : '-'}</span>
             <span class="pt ${ev.points > 0 ? 'plus' : 'minus'}">${ev.points > 0 ? '+' : '−'}${Math.abs(ev.points)}</span>
             <span class="grow">${escapeHtml(ev.reason)}</span>
           </li>`).join('')}

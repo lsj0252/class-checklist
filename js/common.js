@@ -88,12 +88,12 @@ export const TYPE_LABEL = {
   [TYPE.DUTY]: '1인 1역'
 };
 
-/** checks 문서 ID — 항목 × 학생 조합당 하나 (중복 생성 방지) */
+/** checks 문서 ID - 항목 × 학생 조합당 하나 (중복 생성 방지) */
 export function checkId(itemId, studentId) {
   return `${itemId}__${studentId}`;
 }
 
-/** certAwards 문서 ID — 자격증 × 학생 조합당 하나 */
+/** certAwards 문서 ID - 자격증 × 학생 조합당 하나 */
 export function awardId(certId, studentId) {
   return `${certId}__${studentId}`;
 }
@@ -135,18 +135,18 @@ export function nextPrivilege(cert, level) {
 /* ── 신용도 점수 규칙 ── */
 export const CREDIT = {
   ON_TIME: 1,      // 숙제·가정통신문을 마감일까지 제출
-  LATE: -2,        // 가정통신문을 늦게 냄 (또는 마감일이 지나도록 미회수)
+  LATE: -2,        // 마감일이 지나서 냄 (또는 마감일이 지나도록 미제출)
   DUTY_MISS: -2,   // 그 주가 끝났는데 1인 1역 미완료
   DEFAULT_BASE: 100
 };
 
-/** 항목의 마감일 – 숙제는 따로 정하지 않으면 숙제 날짜가 마감일 */
+/** 항목의 마감일 - 숙제는 따로 정하지 않으면 숙제 날짜가 마감일 */
 export const dueOf = (item) =>
   item.type === TYPE.HOMEWORK ? (item.dueDate || item.date) : item.dueDate || null;
 
 /**
  * 학생 한 명의 신용도 점수 내역.
- * ctx = { items, checks, adjustments } – 교사·학생 화면이 함께 쓴다.
+ * ctx = { items, checks, adjustments } - 교사·학생 화면이 함께 쓴다.
  * 판정 기준은 체크한 시각(checkedAt)이다.
  */
 export function creditEvents(ctx, studentId) {
@@ -159,23 +159,20 @@ export function creditEvents(ctx, studentId) {
     const on = stampDate(check?.checkedAt);   // 체크한 날짜 (아직 없으면 null)
     const due = dueOf(item);
 
-    if (item.type === TYPE.HOMEWORK) {
-      // 기한 내 제출만 가산 (지각·미제출 감점은 규칙에 없음)
-      if (done && (!on || !due || on <= due)) {
-        events.push({ date: on || item.date, points: CREDIT.ON_TIME, reason: `숙제 기한 내 제출 · ${item.title}` });
-      }
-      return;
-    }
+    // 숙제와 가정통신문은 규칙이 같다: 기한 내 +1, 지각 -2, 기한이 지난 미제출 -2
+    if (item.type === TYPE.HOMEWORK || item.type === TYPE.NOTICE) {
+      const word = item.type === TYPE.HOMEWORK
+        ? { kind: '숙제', ok: '기한 내 제출', late: '지각 제출', miss: '미제출' }
+        : { kind: '가정통신문', ok: '기한 내 회수', late: '지각 회수', miss: '미회수' };
 
-    if (item.type === TYPE.NOTICE) {
       if (done) {
         if (!due || !on || on <= due) {
-          events.push({ date: on || item.date, points: CREDIT.ON_TIME, reason: `가정통신문 기한 내 회수 · ${item.title}` });
+          events.push({ date: on || item.date, points: CREDIT.ON_TIME, reason: `${word.kind} ${word.ok} · ${item.title}` });
         } else {
-          events.push({ date: on, points: CREDIT.LATE, reason: `가정통신문 지각 회수 · ${item.title}` });
+          events.push({ date: on, points: CREDIT.LATE, reason: `${word.kind} ${word.late} · ${item.title}` });
         }
       } else if (due && due < today) {
-        events.push({ date: due, points: CREDIT.LATE, reason: `가정통신문 미회수 · ${item.title}` });
+        events.push({ date: due, points: CREDIT.LATE, reason: `${word.kind} ${word.miss} · ${item.title}` });
       }
       return;
     }
@@ -214,7 +211,7 @@ export function rate(done, total) {
 
 export function rateText(done, total) {
   const r = rate(done, total);
-  return r == null ? '–' : `${r}%`;
+  return r == null ? '-' : `${r}%`;
 }
 
 let toastTimer = null;

@@ -8,7 +8,7 @@
 | 화면 | 파일 | 설명 |
 |---|---|---|
 | 진입점 | `index.html` | 교사 / 학생 선택 |
-| 교사용 대시보드 | `teacher.html` | 홈 · 학생별 체크 · 항목 관리 · 통계 · 자격증 · 신용도 (6개 탭) |
+| 교사용 대시보드 | `teacher.html` | 홈 · 학생별 체크 · 자격증 · 신용도 · 항목 관리 · 통계 (6개 탭) |
 | 학생용 현황 | `student.html` | 이름 선택 로그인 후 본인 현황 · 자격증 · 신용도 점수 열람 |
 
 ## 1. Firebase 설정
@@ -86,11 +86,11 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 |---|---|---|
 | `students` | 자동 | `number`, `name`, `createdAt` |
 | `certs` | 자동 | `name`, `privileges`(`{"1":"…", …, "10":"…"}` 급수별 특권), `createdAt` |
-| `certAwards` | `{certId}__{studentId}` | `certId`, `studentId`, `level`(1~10), `updatedAt` — 기록이 없으면 10급 |
-| `creditAdjustments` | 자동 | `studentId`, `points`(±), `reason`, `date` — 수동 가감점 |
-| `settings` | `credit` | `baseScore` — 신용도 기준 점수 (기본 100) |
-| `roles` | 자동 | `name`, `createdAt` — 1인 1역 역할 목록 |
-| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(마감일 · 선택 — 숙제는 비우면 숙제 당일이 마감), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
+| `certAwards` | `{certId}__{studentId}` | `certId`, `studentId`, `level`(1~10), `updatedAt` - 기록이 없으면 10급 |
+| `creditAdjustments` | 자동 | `studentId`, `points`(±), `reason`, `date` - 수동 가감점 |
+| `settings` | `credit` | `baseScore` - 신용도 기준 점수 (기본 100) |
+| `roles` | 자동 | `name`, `createdAt` - 1인 1역 역할 목록 |
+| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(마감일 · 선택 - 숙제는 비우면 숙제 당일이 마감), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
 | `checks` | `{itemId}__{studentId}` | `itemId`, `studentId`, `type`, `date`, `done`, `checkedAt` |
 
 - 문서 ID를 조합키로 고정해 **중복 체크 기록이 생기지 않습니다.**
@@ -108,7 +108,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 
 - **항목 관리** 탭에서 자격증을 만들고, 급수(1~10급)마다 어떤 특권을 주는지 적어 둡니다. 비워 둔 급수는 특권 없이 넘어갑니다.
 - 모든 학생은 **10급에서 시작**해 **1급**까지 올라갑니다. **자격증** 탭의 표에서 학생별 급수를 바꾸면 학생 화면에 바로 반영됩니다.
-- 학생 화면에는 **지금까지 획득한 특권**(10급 → 현재 급수)이 모두 쌓여서 보이고, 바로 다음 급수의 특권이 잠금 상태로 표시됩니다.
+- 학생 화면에는 **지금까지 획득한 특권**(10급 → 현재 급수)만 보입니다. 아직 못 딴 급수의 특권 내용은 감춰지고, 다음 목표 급수 번호만 알려 줍니다.
 
 ## 신용도 점수표
 
@@ -118,11 +118,12 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 |---|---|
 | 숙제를 마감일까지 제출 | **+1** |
 | 가정통신문을 마감일까지 회수 | **+1** |
+| 숙제를 마감일이 지나서 냄 (또는 지금까지 미제출) | **−2** |
 | 가정통신문을 마감일이 지나서 냄 (또는 지금까지 미회수) | **−2** |
 | 그 주가 끝났는데 1인 1역 미완료 | **−2** |
 
 - 판정 기준은 **체크한 시각**(`checks.checkedAt`)입니다. 며칠 뒤 몰아서 체크하면 늦게 낸 것으로 잡히니, 그럴 때는 **수동 가감점**으로 조정하세요.
-- 숙제를 늦게 내거나 안 낸 경우는 감점하지 않습니다(가산만 없음). 감점을 원하면 `js/common.js` 의 `creditEvents()` 에서 숙제 분기를 고치면 됩니다.
+- 숙제는 마감일을 비워 두면 **숙제 당일**이 마감일입니다. 그날 안에 체크하지 않으면 다음 날부터 미제출로 −2가 됩니다.
 - 학생 행을 누르면 점수가 어떻게 계산됐는지 항목별 내역이 펼쳐집니다. 학생 화면에도 같은 내역이 보입니다.
 
 ## 학기 정리
