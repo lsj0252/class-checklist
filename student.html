@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>내 현황 · 우리 반 체크리스트</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="student">
+
+  <!-- 이름 선택 로그인 -->
+  <section id="pick" class="pick">
+    <h1>이름을 눌러 주세요</h1>
+    <p class="sub">비밀번호 없이 내 현황을 볼 수 있어요.</p>
+    <div id="pick-list" class="name-grid">
+      <p class="empty">학생 명단을 불러오는 중…</p>
+    </div>
+    <a class="link" href="index.html">← 처음으로</a>
+  </section>
+
+  <!-- 내 현황 -->
+  <section id="me" class="me" hidden>
+    <header class="me-top">
+      <div>
+        <div id="me-name" class="me-name"></div>
+        <div id="me-date" class="me-date"></div>
+      </div>
+      <button id="switch" class="btn ghost small">다른 학생</button>
+    </header>
+
+    <div id="me-banner" class="me-banner"></div>
+
+    <div class="me-block">
+      <h2>📘 오늘 숙제</h2>
+      <ul id="me-homework" class="me-list"></ul>
+    </div>
+
+    <div class="me-block">
+      <h2>📄 가정통신문</h2>
+      <ul id="me-notice" class="me-list"></ul>
+    </div>
+
+    <div class="me-block">
+      <h2>🧹 이번 주 1인 1역</h2>
+      <ul id="me-duty" class="me-list"></ul>
+    </div>
+
+    <p class="me-foot">체크는 선생님만 할 수 있어요. 화면은 자동으로 새로고침됩니다.</p>
+  </section>
+
+  <script type="module" src="js/student.js"></script>
+</body>
+</html>

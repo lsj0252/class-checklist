@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>교사용 대시보드 · 우리 반 체크리스트</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="teacher">
+
+  <!-- 로그인 게이트 -->
+  <div id="gate" class="gate">
+    <form id="gate-form" class="gate-card">
+      <h1>🧑‍🏫 교사 로그인</h1>
+      <p class="sub">관리자 비밀번호를 입력하세요.</p>
+      <input id="gate-pw" type="password" placeholder="비밀번호" autocomplete="current-password" />
+      <p id="gate-error" class="gate-error" hidden>비밀번호가 올바르지 않습니다.</p>
+      <button type="submit" class="btn primary block">들어가기</button>
+      <a class="link" href="index.html">← 처음으로</a>
+    </form>
+  </div>
+
+  <!-- 대시보드 -->
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-left">
+        <a class="home-link" href="index.html">✅</a>
+        <h1>우리 반 체크리스트</h1>
+        <span id="class-name" class="badge-muted"></span>
+      </div>
+      <nav class="tabs">
+        <button class="tab active" data-tab="home">홈</button>
+        <button class="tab" data-tab="check">학생별 체크</button>
+        <button class="tab" data-tab="manage">항목 관리</button>
+        <button class="tab" data-tab="stats">통계</button>
+      </nav>
+      <button id="logout" class="btn ghost small">로그아웃</button>
+    </header>
+
+    <main>
+      <!-- 홈 -->
+      <section id="tab-home" class="tab-panel active">
+        <div class="panel-head">
+          <h2 id="home-date">오늘</h2>
+          <span class="hint">오늘 상황을 한눈에 확인하세요.</span>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card" data-kind="homework">
+            <div class="summary-label">오늘 숙제 제출률</div>
+            <div class="summary-rate" id="sum-homework">–</div>
+            <div class="summary-sub" id="sum-homework-sub">항목 없음</div>
+            <div class="bar"><span id="bar-homework"></span></div>
+          </div>
+          <div class="summary-card" data-kind="notice">
+            <div class="summary-label">가정통신문 회수율</div>
+            <div class="summary-rate" id="sum-notice">–</div>
+            <div class="summary-sub" id="sum-notice-sub">진행 중인 통신문 없음</div>
+            <div class="bar"><span id="bar-notice"></span></div>
+          </div>
+          <div class="summary-card" data-kind="duty">
+            <div class="summary-label">이번 주 1인 1역 완료율</div>
+            <div class="summary-rate" id="sum-duty">–</div>
+            <div class="summary-sub" id="sum-duty-sub">배정 없음</div>
+            <div class="bar"><span id="bar-duty"></span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>⚠️ 아직 안 된 학생</h3>
+            <span class="hint">이름을 누르면 미완료 항목이 펼쳐집니다.</span>
+          </div>
+          <div id="pending-list" class="pending-list"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>✅ 오늘 모두 완료</h3></div>
+          <div id="done-list" class="chip-row"></div>
+        </div>
+      </section>
+
+      <!-- 학생별 체크 -->
+      <section id="tab-check" class="tab-panel">
+        <div class="panel-head">
+          <h2>학생별 체크</h2>
+          <div class="controls">
+            <button class="btn ghost small" id="check-prev">◀ 어제</button>
+            <input type="date" id="check-date" />
+            <button class="btn ghost small" id="check-next">내일 ▶</button>
+            <button class="btn ghost small" id="check-today">오늘</button>
+          </div>
+        </div>
+        <p class="hint">칸을 클릭하면 <strong>O ↔ X</strong> 가 바뀝니다. 진행 중인 가정통신문과 이번 주 1인 1역은 날짜와 상관없이 항상 함께 표시됩니다.</p>
+        <div class="table-wrap">
+          <table id="check-table" class="check-table"></table>
+        </div>
+        <div id="check-empty" class="empty" hidden>이 날짜에 체크할 항목이 없습니다. <strong>항목 관리</strong> 탭에서 숙제나 가정통신문을 등록해 주세요.</div>
+      </section>
+
+      <!-- 항목 관리 -->
+      <section id="tab-manage" class="tab-panel">
+        <div class="panel-head"><h2>항목 관리</h2></div>
+
+        <div class="manage-grid">
+          <div class="card">
+            <div class="card-head"><h3>📘 숙제</h3></div>
+            <form id="hw-form" class="stack">
+              <label>날짜<input type="date" id="hw-date" required /></label>
+              <label>내용
+                <textarea id="hw-title" rows="2" placeholder="예) 수학 익힘책 47쪽 + 국어 일기쓰기" required></textarea>
+              </label>
+              <button class="btn primary" type="submit">숙제 등록</button>
+            </form>
+            <div class="list-head">최근 등록</div>
+            <ul id="hw-list" class="item-list"></ul>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>📄 가정통신문</h3></div>
+            <form id="nt-form" class="stack">
+              <label>제목
+                <input type="text" id="nt-title" placeholder="예) 현장체험학습 신청서" required />
+              </label>
+              <label>배부일<input type="date" id="nt-date" required /></label>
+              <button class="btn primary" type="submit">통신문 등록</button>
+            </form>
+            <div class="list-head">진행 중 / 마감</div>
+            <ul id="nt-list" class="item-list"></ul>
+          </div>
+
+          <div class="card wide">
+            <div class="card-head">
+              <h3>🧹 1인 1역</h3>
+              <div class="controls">
+                <button class="btn ghost small" id="duty-prev">◀ 지난주</button>
+                <span id="duty-week-label" class="badge-muted"></span>
+                <button class="btn ghost small" id="duty-next">다음주 ▶</button>
+                <button class="btn ghost small" id="duty-copy">지난주 배정 복사</button>
+              </div>
+            </div>
+
+            <div class="duty-cols">
+              <div>
+                <div class="list-head">역할 목록</div>
+                <form id="role-form" class="row tight">
+                  <input type="text" id="role-name" placeholder="예) 칠판 담당" required />
+                  <button class="btn primary small" type="submit">추가</button>
+                </form>
+                <ul id="role-list" class="item-list"></ul>
+              </div>
+              <div>
+                <div class="list-head">주간 배정</div>
+                <ul id="duty-assign" class="assign-list"></ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="card wide">
+            <div class="card-head"><h3>🧒 학생 명단</h3></div>
+            <form id="st-form" class="row tight">
+              <input type="number" id="st-number" placeholder="번호" min="1" class="num-input" required />
+              <input type="text" id="st-name" placeholder="이름" required />
+              <button class="btn primary small" type="submit">추가</button>
+            </form>
+            <details class="bulk">
+              <summary>여러 명 한 번에 추가</summary>
+              <p class="hint">한 줄에 <code>번호 이름</code> 형식으로 입력하세요. (예: <code>1 김민준</code>)</p>
+              <textarea id="st-bulk" rows="5" placeholder="1 김민준"></textarea>
+              <button class="btn primary small" id="st-bulk-btn" type="button">일괄 추가</button>
+            </details>
+            <ul id="st-list" class="item-list student-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 통계 -->
+      <section id="tab-stats" class="tab-panel">
+        <div class="panel-head">
+          <h2>통계</h2>
+          <div class="controls">
+            <select id="stat-range">
+              <option value="week">이번 주</option>
+              <option value="month">이번 달</option>
+              <option value="semester" selected>학기 전체</option>
+              <option value="custom">직접 입력</option>
+            </select>
+            <span id="stat-custom" hidden>
+              <input type="date" id="stat-from" />
+              <span>~</span>
+              <input type="date" id="stat-to" />
+            </span>
+            <button class="btn ghost small" id="stat-csv">CSV 내려받기</button>
+          </div>
+        </div>
+        <p class="hint">기간 내 <strong>누적 제출률 · 회수율 · 1인 1역 완료율</strong>입니다. 생활기록부 작성 시 성실도·책임감 참고자료로 활용하세요.</p>
+        <div id="stat-period" class="badge-muted"></div>
+        <div class="table-wrap">
+          <table id="stat-table" class="stat-table"></table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="js/teacher.js"></script>
+</body>
+</html>
