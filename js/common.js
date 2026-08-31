@@ -93,6 +93,119 @@ export function checkId(itemId, studentId) {
   return `${itemId}__${studentId}`;
 }
 
+/** certAwards 문서 ID — 자격증 × 학생 조합당 하나 */
+export function awardId(certId, studentId) {
+  return `${certId}__${studentId}`;
+}
+
+/** Firestore Timestamp(또는 ISO 문자열) → 'YYYY-MM-DD'. 값이 없으면 null */
+export function stampDate(ts) {
+  if (!ts) return null;
+  const d = typeof ts.toDate === 'function' ? ts.toDate() : new Date(ts);
+  return Number.isNaN(d.getTime()) ? null : toDateStr(d);
+}
+
+/* ── 자격증 급수 ── */
+/** 1급이 가장 높고 10급이 시작 급수 */
+export const LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const START_LEVEL = 10;
+export const TOP_LEVEL = 1;
+
+/** 자격증 기록이 없으면 시작 급수(10급) */
+export const levelOf = (awards, certId, studentId) =>
+  Number(awards.get(awardId(certId, studentId))?.level ?? START_LEVEL);
+
+/** 10급부터 현재 급수까지, 실제로 내용이 적힌 특권들 */
+export function earnedPrivileges(cert, level) {
+  const out = [];
+  for (let lv = START_LEVEL; lv >= level; lv--) {
+    const text = (cert.privileges?.[lv] || '').trim();
+    if (text) out.push({ level: lv, text });
+  }
+  return out;
+}
+
+/** 바로 다음 급수의 특권 (이미 1급이면 null) */
+export function nextPrivilege(cert, level) {
+  const next = level - 1;
+  if (next < TOP_LEVEL) return null;
+  return { level: next, text: (cert.privileges?.[next] || '').trim() };
+}
+
+/* ── 신용도 점수 규칙 ── */
+export const CREDIT = {
+  ON_TIME: 1,      // 숙제·가정통신문을 마감일까지 제출
+  LATE: -2,        // 가정통신문을 늦게 냄 (또는 마감일이 지나도록 미회수)
+  DUTY_MISS: -2,   // 그 주가 끝났는데 1인 1역 미완료
+  DEFAULT_BASE: 100
+};
+
+/** 항목의 마감일 – 숙제는 따로 정하지 않으면 숙제 날짜가 마감일 */
+export const dueOf = (item) =>
+  item.type === TYPE.HOMEWORK ? (item.dueDate || item.date) : item.dueDate || null;
+
+/**
+ * 학생 한 명의 신용도 점수 내역.
+ * ctx = { items, checks, adjustments } – 교사·학생 화면이 함께 쓴다.
+ * 판정 기준은 체크한 시각(checkedAt)이다.
+ */
+export function creditEvents(ctx, studentId) {
+  const today = todayStr();
+  const events = [];
+
+  (ctx.items || []).forEach((item) => {
+    const check = ctx.checks?.get(checkId(item.id, studentId));
+    const done = !!check?.done;
+    const on = stampDate(check?.checkedAt);   // 체크한 날짜 (아직 없으면 null)
+    const due = dueOf(item);
+
+    if (item.type === TYPE.HOMEWORK) {
+      // 기한 내 제출만 가산 (지각·미제출 감점은 규칙에 없음)
+      if (done && (!on || !due || on <= due)) {
+        events.push({ date: on || item.date, points: CREDIT.ON_TIME, reason: `숙제 기한 내 제출 · ${item.title}` });
+      }
+      return;
+    }
+
+    if (item.type === TYPE.NOTICE) {
+      if (done) {
+        if (!due || !on || on <= due) {
+          events.push({ date: on || item.date, points: CREDIT.ON_TIME, reason: `가정통신문 기한 내 회수 · ${item.title}` });
+        } else {
+          events.push({ date: on, points: CREDIT.LATE, reason: `가정통신문 지각 회수 · ${item.title}` });
+        }
+      } else if (due && due < today) {
+        events.push({ date: due, points: CREDIT.LATE, reason: `가정통신문 미회수 · ${item.title}` });
+      }
+      return;
+    }
+
+    if (item.type === TYPE.DUTY && item.studentId === studentId) {
+      const weekEnd = addDays(item.week, 6);
+      if (weekEnd < today && !done) {
+        events.push({ date: weekEnd, points: CREDIT.DUTY_MISS, reason: `1인 1역 미완료 · ${item.roleName}` });
+      }
+    }
+  });
+
+  (ctx.adjustments || [])
+    .filter((a) => a.studentId === studentId)
+    .forEach((a) => events.push({
+      date: a.date, points: Number(a.points) || 0, reason: `수동 조정 · ${a.reason}`, manual: true
+    }));
+
+  return events.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+/** 기준 점수 + 가산 − 감점 */
+export function creditScore(ctx, studentId) {
+  const events = creditEvents(ctx, studentId);
+  const plus = events.filter((e) => e.points > 0).reduce((sum, e) => sum + e.points, 0);
+  const minus = events.filter((e) => e.points < 0).reduce((sum, e) => sum + e.points, 0);
+  const base = Number(ctx.baseScore ?? CREDIT.DEFAULT_BASE);
+  return { events, plus, minus, base, total: base + plus + minus };
+}
+
 /* ── 표시 ── */
 export function rate(done, total) {
   if (!total) return null;

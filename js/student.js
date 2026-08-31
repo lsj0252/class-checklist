@@ -5,7 +5,8 @@ import {
   db, collection, doc, onSnapshot, query, where,
   $, escapeHtml, warnIfUnconfigured, toast,
   todayStr, dateLabel, shortDate, weekStart, weekLabel,
-  TYPE, checkId
+  TYPE, checkId, CREDIT,
+  levelOf, earnedPrivileges, nextPrivilege, creditScore
 } from './common.js';
 import { firebaseConfig } from './firebase-config.js';
 
@@ -15,8 +16,12 @@ const state = {
   students: [],
   items: [],
   checks: new Map(),
+  certs: [],
+  awards: new Map(),
+  adjustments: [],
+  baseScore: CREDIT.DEFAULT_BASE,
   me: null,
-  unsubChecks: null
+  unsubMine: []
 };
 
 /* ─────────── 데이터 구독 ─────────── */
@@ -45,6 +50,21 @@ function subscribe() {
   // 항목 (전체 공용)
   onSnapshot(query(collection(db, 'items')), (snap) => {
     state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderMe();
+  }, (err) => console.error(err));
+
+  // 자격증 목록 · 급수별 특권 (전체 공용)
+  onSnapshot(query(collection(db, 'certs')), (snap) => {
+    state.certs = snap.docs
+      .map((d) => ({ id: d.id, privileges: {}, ...d.data() }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    renderMe();
+  }, (err) => console.error(err));
+
+  // 신용도 기준 점수
+  onSnapshot(query(collection(db, 'settings')), (snap) => {
+    const credit = snap.docs.find((d) => d.id === 'credit');
+    state.baseScore = Number(credit?.data().baseScore ?? CREDIT.DEFAULT_BASE);
     renderMe();
   }, (err) => console.error(err));
 }
@@ -78,25 +98,45 @@ function selectStudent(id) {
   $('#pick').hidden = true;
   $('#me').hidden = false;
 
-  // 내 체크 기록만 구독
-  state.unsubChecks?.();
-  state.unsubChecks = onSnapshot(
+  // 내 기록만 구독 (체크 · 자격증 급수 · 수동 가감점)
+  unsubscribeMine();
+  const onError = (err) => { console.error(err); toast('현황을 불러오지 못했습니다.', 'error'); };
+
+  state.unsubMine.push(onSnapshot(
     query(collection(db, 'checks'), where('studentId', '==', id)),
     (snap) => {
       state.checks = new Map(snap.docs.map((d) => [d.id, d.data()]));
       renderMe();
-    },
-    (err) => { console.error(err); toast('현황을 불러오지 못했습니다.', 'error'); }
-  );
+    }, onError));
+
+  state.unsubMine.push(onSnapshot(
+    query(collection(db, 'certAwards'), where('studentId', '==', id)),
+    (snap) => {
+      state.awards = new Map(snap.docs.map((d) => [d.id, d.data()]));
+      renderMe();
+    }, onError));
+
+  state.unsubMine.push(onSnapshot(
+    query(collection(db, 'creditAdjustments'), where('studentId', '==', id)),
+    (snap) => {
+      state.adjustments = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderMe();
+    }, onError));
 
   renderMe();
 }
 
+function unsubscribeMine() {
+  state.unsubMine.forEach((fn) => fn?.());
+  state.unsubMine = [];
+}
+
 function backToPick() {
-  state.unsubChecks?.();
-  state.unsubChecks = null;
+  unsubscribeMine();
   state.me = null;
   state.checks = new Map();
+  state.awards = new Map();
+  state.adjustments = [];
   localStorage.removeItem(PICK_KEY);
   $('#me').hidden = true;
   $('#pick').hidden = false;
@@ -156,6 +196,9 @@ function renderMe() {
     ? row(duty, duty.roleName, weekLabel(week))
     : none('이번 주 배정된 역할이 없어요.');
 
+  renderCerts();
+  renderCredit();
+
   const all = [...homework, ...notices, ...(duty ? [duty] : [])];
   const todo = all.filter((i) => !isDone(i.id)).length;
   const banner = $('#me-banner');
@@ -169,6 +212,61 @@ function renderMe() {
     banner.className = 'me-banner has-todo';
     banner.textContent = `아직 ${todo}개 남았어요.`;
   }
+}
+
+/* ─────────── 내 자격증 ─────────── */
+function renderCerts() {
+  const box = $('#me-certs');
+  if (!state.certs.length) {
+    box.innerHTML = '<p class="none-box">아직 자격증이 없어요.</p>';
+    return;
+  }
+
+  box.innerHTML = state.certs.map((cert) => {
+    const level = levelOf(state.awards, cert.id, state.me.id);
+    const earned = earnedPrivileges(cert, level);
+    const next = nextPrivilege(cert, level);
+
+    const earnedHtml = earned.length
+      ? `<ul class="priv-earned">${earned.map((p) => `
+          <li><span class="lv-tag lv-${p.level}">${p.level}급</span>${escapeHtml(p.text)}</li>`).join('')}</ul>`
+      : '<p class="priv-none">지금 급수에서 받는 특권은 아직 없어요.</p>';
+
+    const nextHtml = next
+      ? `<p class="priv-next">🔒 다음 목표 <strong>${next.level}급</strong>${next.text ? ` — ${escapeHtml(next.text)}` : ''}</p>`
+      : '<p class="priv-next top">🎉 가장 높은 1급이에요!</p>';
+
+    return `
+      <div class="cert-card">
+        <div class="cert-card-head">
+          <span class="cert-title">${escapeHtml(cert.name)}</span>
+          <span class="lv-badge lv-${level}">${level}급</span>
+        </div>
+        ${earnedHtml}
+        ${nextHtml}
+      </div>`;
+  }).join('');
+}
+
+/* ─────────── 내 신용도 점수 ─────────── */
+function renderCredit() {
+  const { events, plus, minus, total, base } = creditScore(state, state.me.id);
+  const recent = events.slice(0, 8);
+
+  $('#me-credit').innerHTML = `
+    <div class="credit-card">
+      <div class="credit-score ${total >= base ? 'up' : 'down'}">${total}<span>점</span></div>
+      <div class="credit-sub">기준 ${base}점 · 획득 +${plus} · 감점 ${minus === 0 ? 0 : `−${Math.abs(minus)}`}</div>
+    </div>
+    ${recent.length ? `
+      <ul class="event-list">
+        ${recent.map((ev) => `
+          <li>
+            <span class="badge-muted">${ev.date ? shortDate(ev.date) : '–'}</span>
+            <span class="pt ${ev.points > 0 ? 'plus' : 'minus'}">${ev.points > 0 ? '+' : '−'}${Math.abs(ev.points)}</span>
+            <span class="grow">${escapeHtml(ev.reason)}</span>
+          </li>`).join('')}
+      </ul>` : '<p class="none-box">아직 점수에 반영된 일이 없어요.</p>'}`;
 }
 
 /* ─────────── 시작 (선언이 모두 끝난 뒤 실행) ─────────── */

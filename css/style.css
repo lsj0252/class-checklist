@@ -274,12 +274,12 @@ tfoot td { font-size: 12px; color: var(--muted); background: #f8fafc; font-weigh
 .state-tag.closed { background: #eef2f7; color: var(--muted); }
 .state-tag.overdue { background: #fee2e2; color: #991b1b; }
 .due-input { width: auto; max-width: 145px; padding: 4px 8px; font-size: 12px; }
-.notice-item { flex-direction: column; align-items: stretch; gap: 7px; }
-.notice-top, .notice-bottom { display: flex; align-items: center; gap: 8px; }
-.notice-bottom { flex-wrap: wrap; }
-.notice-top .grow { font-weight: 600; }
-.notice-bottom .btn { margin-left: auto; }
-.notice-bottom .btn + .btn { margin-left: 0; }
+.dated-item { flex-direction: column; align-items: stretch; gap: 7px; }
+.dated-top, .dated-bottom { display: flex; align-items: center; gap: 8px; }
+.dated-bottom { flex-wrap: wrap; }
+.dated-top .grow { font-weight: 600; }
+.dated-bottom .btn { margin-left: auto; }
+.dated-bottom .btn + .btn { margin-left: 0; }
 .due-label {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12px; color: var(--muted); font-weight: 600;
@@ -305,6 +305,71 @@ label .opt { color: #9ca3af; }
 .rate-mid { color: var(--amber); font-weight: 700; }
 .rate-low { color: var(--warn); font-weight: 700; }
 #stat-period { margin-bottom: 12px; }
+
+/* ─────────────── 자격증 ─────────────── */
+.type-tag.cert { background: #ede9fe; color: #5b21b6; }
+
+/* 급수 색: 10급(시작) 회색 → 1급 보라 */
+.lv-tag, .lv-badge {
+  display: inline-block; border-radius: 999px; font-weight: 700;
+  background: #eef2f7; color: var(--muted); flex: 0 0 auto;
+}
+.lv-tag { font-size: 11px; padding: 2px 9px; min-width: 40px; text-align: center; }
+.lv-badge { font-size: 15px; padding: 4px 14px; }
+.lv-10, .lv-9 { background: #eef2f7; color: #64748b; }
+.lv-8, .lv-7 { background: #dbeafe; color: #1d4ed8; }
+.lv-6, .lv-5 { background: #d1fae5; color: #047857; }
+.lv-4, .lv-3 { background: #fef3c7; color: #b45309; }
+.lv-2, .lv-1 { background: #ede9fe; color: #6d28d9; }
+
+.lv-cell { padding: 6px 8px; }
+.lv-select {
+  width: auto; min-width: 88px; font-weight: 700; font-size: 13px;
+  padding: 5px 8px; border-radius: 999px; text-align: center;
+}
+.lv-select.lv-10, .lv-select.lv-9 { border-color: #cbd5e1; }
+.lv-select.lv-2, .lv-select.lv-1 { border-color: #c4b5fd; }
+
+.cert-block { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; }
+.cert-block > summary {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 11px 14px; list-style: none; font-weight: 600;
+}
+.cert-block > summary::-webkit-details-marker { display: none; }
+.cert-block .cert-name { flex: 1; }
+.priv-list { list-style: none; margin: 0; padding: 0 14px 12px; }
+.priv-list li { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.priv-input { font-size: 13px; padding: 6px 10px; }
+.priv-group { margin-bottom: 16px; }
+.priv-group .meta { font-size: 12px; color: var(--muted); flex: 0 0 auto; }
+
+/* ─────────────── 신용도 ─────────────── */
+.rule-list {
+  list-style: none; margin: 0 0 12px; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+}
+.rule-list li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.pt {
+  font-weight: 800; font-variant-numeric: tabular-nums;
+  border-radius: 8px; padding: 1px 8px; font-size: 13px; flex: 0 0 auto;
+}
+.pt.plus { background: var(--ok-soft); color: #047857; }
+.pt.minus { background: var(--warn-soft); color: #b91c1c; }
+.stat-table .pt { background: transparent; padding: 0; }
+.stat-table td.total { font-size: 17px; font-weight: 800; }
+.stat-table td.total.up { color: var(--ok); }
+.stat-table td.total.down { color: var(--warn); }
+#credit-table tbody tr[data-student] { cursor: pointer; }
+.detail-row td { background: #f8fafc; text-align: left; padding: 6px 16px 12px; }
+.event-list { list-style: none; margin: 0; padding: 0; }
+.event-list li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--line);
+}
+.event-list li:last-child { border-bottom: 0; }
+.event-list .grow { flex: 1; }
+label.inline { display: inline-flex; align-items: center; gap: 8px; }
+label.inline input { margin-top: 0; }
 
 /* ─────────────── 학생 화면 ─────────────── */
 body.student { padding: 18px 16px 40px; max-width: 640px; margin: 0 auto; }
@@ -350,6 +415,36 @@ body.student { padding: 18px 16px 40px; max-width: 640px; margin: 0 auto; }
 .me-list li.todo .status { color: var(--warn); }
 .me-list .none { justify-content: center; color: var(--muted); font-weight: 400; border-left-color: var(--line); }
 .me-foot { color: var(--muted); font-size: 12px; text-align: center; margin-top: 30px; }
+
+/* 학생 – 자격증 카드 */
+.cert-cards { display: flex; flex-direction: column; gap: 12px; }
+.cert-card { background: #fff; border-radius: 16px; box-shadow: var(--shadow); padding: 16px 18px; }
+.cert-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.cert-title { flex: 1; font-size: 17px; font-weight: 700; }
+.priv-earned { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.priv-earned li { display: flex; align-items: center; gap: 9px; font-size: 14px; word-break: keep-all; }
+.priv-none { margin: 0; font-size: 13px; color: var(--muted); }
+.priv-next {
+  margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line);
+  font-size: 13px; color: var(--muted); word-break: keep-all;
+}
+.priv-next.top { color: #b45309; font-weight: 600; }
+
+/* 학생 – 신용도 */
+.credit-card {
+  background: #fff; border-radius: 16px; box-shadow: var(--shadow);
+  padding: 18px; text-align: center; margin-bottom: 12px;
+}
+.credit-score { font-size: 40px; font-weight: 800; line-height: 1.1; }
+.credit-score span { font-size: 17px; margin-left: 3px; }
+.credit-score.up { color: var(--ok); }
+.credit-score.down { color: var(--warn); }
+.credit-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.me .event-list li { background: #fff; border-radius: 12px; border-bottom: 0; padding: 10px 14px; margin-bottom: 7px; }
+.none-box {
+  background: #fff; border-radius: 16px; box-shadow: var(--shadow);
+  padding: 18px; text-align: center; color: var(--muted); margin: 0; font-size: 14px;
+}
 
 /* ─────────────── 토스트 / 배너 ─────────────── */
 .toast {

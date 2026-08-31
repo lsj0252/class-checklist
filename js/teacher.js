@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-//  교사용 대시보드 – 홈 / 학생별 체크 / 항목 관리 / 통계
+//  교사용 대시보드
+//  홈 / 학생별 체크 / 항목 관리 / 통계 / 자격증 / 신용도
 // ─────────────────────────────────────────────────────────────
 import {
   db, TEACHER_PASSWORD, CLASS_NAME,
@@ -7,16 +8,22 @@ import {
   onSnapshot, query, writeBatch, serverTimestamp,
   $, $$, escapeHtml, toast, warnIfUnconfigured,
   todayStr, dateLabel, shortDate, addDays, weekStart, weekLabel, monthStart,
-  TYPE, TYPE_LABEL, checkId, rate
+  TYPE, TYPE_LABEL, checkId, awardId, rate,
+  LEVELS, START_LEVEL, CREDIT, dueOf,
+  levelOf as levelIn, creditScore
 } from './common.js';
 import { firebaseConfig } from './firebase-config.js';
 
 /* ─────────── 상태 ─────────── */
 const state = {
   students: [],          // {id, number, name}
-  items: [],             // {id, type, title, date|week, ...}
+  items: [],             // {id, type, title, date|week, dueDate, ...}
   roles: [],             // {id, name}
-  checks: new Map(),     // checkId -> {itemId, studentId, done}
+  checks: new Map(),     // checkId -> {itemId, studentId, done, checkedAt}
+  certs: [],             // {id, name, privileges: {'1'..'10': string}}
+  awards: new Map(),     // awardId -> {certId, studentId, level}
+  adjustments: [],       // {id, studentId, points, reason, date}
+  baseScore: CREDIT.DEFAULT_BASE,
   checkDate: todayStr(),
   dutyWeek: weekStart(),
   started: false
@@ -26,7 +33,11 @@ const col = {
   students: collection(db, 'students'),
   items: collection(db, 'items'),
   roles: collection(db, 'roles'),
-  checks: collection(db, 'checks')
+  checks: collection(db, 'checks'),
+  certs: collection(db, 'certs'),
+  awards: collection(db, 'certAwards'),
+  adjustments: collection(db, 'creditAdjustments'),
+  settings: collection(db, 'settings')
 };
 
 /* ─────────── 로그인 ─────────── */
@@ -90,6 +101,34 @@ function subscribe() {
     state.checks = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
     renderAll();
   }, onError('체크 기록'));
+
+  onSnapshot(query(col.certs), (snap) => {
+    state.certs = snap.docs
+      .map((d) => ({ id: d.id, privileges: {}, ...d.data() }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    renderAll();
+  }, onError('자격증'));
+
+  onSnapshot(query(col.awards), (snap) => {
+    state.awards = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+    renderAll();
+  }, onError('자격증 급수'));
+
+  onSnapshot(query(col.adjustments), (snap) => {
+    state.adjustments = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    renderAll();
+  }, onError('수동 가감점'));
+
+  onSnapshot(query(col.settings), (snap) => {
+    const credit = snap.docs.find((d) => d.id === 'credit');
+    state.baseScore = Number(credit?.data().baseScore ?? CREDIT.DEFAULT_BASE);
+    if ($('#credit-base') && document.activeElement !== $('#credit-base')) {
+      $('#credit-base').value = state.baseScore;
+    }
+    renderAll();
+  }, onError('설정'));
 }
 
 /* ─────────── 조회 헬퍼 ─────────── */
@@ -104,12 +143,16 @@ const openNotices = () =>
       (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') ||
       (a.date || '').localeCompare(b.date || ''));
 
-/** 마감일이 지났는데 아직 마감 처리하지 않은 통신문 */
-const isOverdue = (item) => !item.closed && !!item.dueDate && item.dueDate < todayStr();
+/** 마감일이 지났는데 아직 마감 처리하지 않은 항목 */
+const isOverdue = (item) => !item.closed && !!dueOf(item) && dueOf(item) < todayStr();
 
 /** '배부 8/29 · 마감 9/5' */
 const noticeMeta = (item) =>
   `배부 ${shortDate(item.date)}${item.dueDate ? ` · 마감 ${shortDate(item.dueDate)}` : ''}`;
+
+/** '9/1 · 마감 9/3' (마감일을 따로 안 정한 숙제는 날짜만) */
+const homeworkMeta = (item) =>
+  `${shortDate(item.date)}${item.dueDate ? ` · 마감 ${shortDate(item.dueDate)}` : ''}`;
 
 const dutiesOf = (week) => state.items.filter((i) => i.type === TYPE.DUTY && i.week === week);
 
@@ -120,6 +163,10 @@ const isDone = (itemId, studentId) => !!state.checks.get(checkId(itemId, student
 
 /** 항목의 기준 날짜 (숙제·통신문은 date, 1인 1역은 주 시작일) */
 const itemDate = (item) => item.date || item.week || '';
+
+/* ─────────── 자격증 · 신용도 (계산은 common.js 공용) ─────────── */
+const levelOf = (certId, studentId) => levelIn(state.awards, certId, studentId);
+const scoreOf = (studentId) => creditScore(state, studentId);
 
 /* ─────────── 체크 쓰기 ─────────── */
 async function setCheck(item, studentId, done) {
@@ -200,6 +247,8 @@ function initUI() {
 
   initManageUI();
   initStatsUI();
+  initCertUI();
+  initCreditUI();
   renderAll();
 }
 
@@ -209,6 +258,8 @@ function renderAll() {
   renderCheck();
   renderManage();
   renderStats();
+  renderCerts();
+  renderCredit();
 }
 
 /* ═══════════ 홈 ═══════════ */
@@ -294,7 +345,9 @@ function buildColumns() {
 
   homeworkOn(date).forEach((item) => cols.push({
     key: item.id, type: TYPE.HOMEWORK, title: item.title,
-    meta: shortDate(item.date), itemFor: () => item
+    meta: isOverdue(item) ? `${homeworkMeta(item)} · 지남` : homeworkMeta(item),
+    metaClass: isOverdue(item) ? 'overdue' : '',
+    itemFor: () => item
   }));
 
   openNotices().forEach((item) => cols.push({
@@ -403,9 +456,14 @@ function initManageUI() {
     e.preventDefault();
     const title = $('#hw-title').value.trim();
     const date = $('#hw-date').value;
+    const dueDate = $('#hw-due').value || null;
     if (!title || !date) return;
-    await addDoc(col.items, { type: TYPE.HOMEWORK, title, date, createdAt: serverTimestamp() });
+    if (dueDate && dueDate < date) { toast('마감일이 숙제 날짜보다 빠릅니다.', 'error'); return; }
+    await addDoc(col.items, {
+      type: TYPE.HOMEWORK, title, date, dueDate, createdAt: serverTimestamp()
+    });
     $('#hw-title').value = '';
+    $('#hw-due').value = '';
     toast('숙제를 등록했습니다.');
   });
 
@@ -432,6 +490,35 @@ function initManageUI() {
     if (!name) return;
     await addDoc(col.roles, { name, createdAt: serverTimestamp() });
     $('#role-name').value = '';
+  });
+
+  // 자격증 추가
+  $('#cert-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('#cert-name').value.trim();
+    if (!name) return;
+    await addDoc(col.certs, { name, privileges: {}, createdAt: serverTimestamp() });
+    $('#cert-name').value = '';
+    toast('자격증을 만들었습니다. 급수별 특권을 적어 주세요.');
+  });
+
+  // 급수별 특권 수정
+  $('#cert-manage-list').addEventListener('change', async (e) => {
+    const input = e.target.closest('.priv-input');
+    if (!input) return;
+    const { id, level } = input.dataset;
+    const cert = state.certs.find((c) => c.id === id);
+    const privileges = { ...(cert?.privileges || {}), [level]: input.value.trim() };
+    await updateDoc(doc(db, 'certs', id), { privileges });
+    toast(`${level}급 특권을 저장했습니다.`);
+  });
+
+  // 신용도 기준 점수
+  $('#credit-base').addEventListener('change', async (e) => {
+    const value = Number(e.target.value);
+    if (!Number.isFinite(value)) { toast('숫자를 입력해 주세요.', 'error'); return; }
+    await setDoc(doc(db, 'settings', 'credit'), { baseScore: value }, { merge: true });
+    toast(`기준 점수를 ${value}점으로 정했습니다.`);
   });
 
   // 학생 추가
@@ -481,31 +568,51 @@ function initManageUI() {
       if (!confirm('역할을 삭제할까요? (이미 배정된 주간 기록은 그대로 남습니다)')) return;
       await deleteDoc(doc(db, 'roles', id));
     }
+    if (action === 'del-cert') {
+      if (!confirm('자격증을 삭제할까요? 학생들의 급수 기록도 함께 삭제됩니다.')) return;
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'certs', id));
+      for (const a of state.awards.values()) {
+        if (a.certId === id) batch.delete(doc(db, 'certAwards', a.id));
+      }
+      await batch.commit();
+      toast('삭제했습니다.');
+    }
+    if (action === 'del-adj') {
+      await deleteDoc(doc(db, 'creditAdjustments', id));
+      toast('가감점을 취소했습니다.');
+    }
     if (action === 'del-student') {
       if (!confirm('학생을 삭제할까요? 이 학생의 체크 기록도 함께 삭제됩니다.')) return;
       const batch = writeBatch(db);
       batch.delete(doc(db, 'students', id));
       for (const c of state.checks.values()) if (c.studentId === id) batch.delete(doc(db, 'checks', c.id));
       for (const i of state.items) if (i.type === TYPE.DUTY && i.studentId === id) batch.delete(doc(db, 'items', i.id));
+      for (const a of state.awards.values()) if (a.studentId === id) batch.delete(doc(db, 'certAwards', a.id));
+      for (const a of state.adjustments) if (a.studentId === id) batch.delete(doc(db, 'creditAdjustments', a.id));
       await batch.commit();
       toast('삭제했습니다.');
     }
   });
 
-  // 가정통신문 마감일 변경 (목록에서 바로 수정)
-  $('#nt-list').addEventListener('change', async (e) => {
+  // 숙제·가정통신문 마감일 변경 (목록에서 바로 수정)
+  const onDueChange = async (e) => {
     const input = e.target.closest('.due-input');
     if (!input) return;
     const item = state.items.find((i) => i.id === input.dataset.id);
     const value = input.value || null;
     if (value && item && value < item.date) {
-      toast('마감일이 배부일보다 빠릅니다.', 'error');
+      toast(item.type === TYPE.HOMEWORK
+        ? '마감일이 숙제 날짜보다 빠릅니다.'
+        : '마감일이 배부일보다 빠릅니다.', 'error');
       input.value = item.dueDate || '';
       return;
     }
     await updateDoc(doc(db, 'items', input.dataset.id), { dueDate: value });
     toast(value ? `마감일을 ${shortDate(value)}로 정했습니다.` : '마감일을 지웠습니다.');
-  });
+  };
+  $('#nt-list').addEventListener('change', onDueChange);
+  $('#hw-list').addEventListener('change', onDueChange);
 
   // 1인 1역 배정 변경
   $('#duty-assign').addEventListener('change', async (e) => {
@@ -549,10 +656,19 @@ function renderManage() {
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 15);
   $('#hw-list').innerHTML = hw.length ? hw.map((i) => `
-    <li>
-      <span class="badge-muted">${shortDate(i.date)}</span>
-      <span class="grow">${escapeHtml(i.title)}</span>
-      <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
+    <li class="dated-item">
+      <div class="dated-top">
+        <span class="badge-muted">${shortDate(i.date)}</span>
+        <span class="grow">${escapeHtml(i.title)}</span>
+      </div>
+      <div class="dated-bottom">
+        <label class="due-label">마감
+          <input type="date" class="due-input" data-id="${i.id}"
+                 value="${escapeHtml(i.dueDate || '')}" min="${escapeHtml(i.date || '')}" />
+        </label>
+        <span class="meta">${i.dueDate ? '' : '비우면 숙제 당일까지'}</span>
+        <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
+      </div>
     </li>`).join('') : '<li class="empty">등록된 숙제가 없습니다.</li>';
 
   // 가정통신문 목록
@@ -562,12 +678,12 @@ function renderManage() {
     const over = isOverdue(i);
     const tag = i.closed ? ['closed', '마감'] : over ? ['overdue', '지남'] : ['open', '진행중'];
     return `
-    <li class="notice-item">
-      <div class="notice-top">
+    <li class="dated-item">
+      <div class="dated-top">
         <span class="state-tag ${tag[0]}">${tag[1]}</span>
         <span class="grow">${escapeHtml(i.title)}</span>
       </div>
-      <div class="notice-bottom">
+      <div class="dated-bottom">
         <span class="meta">배부 ${shortDate(i.date)}</span>
         <label class="due-label">마감
           <input type="date" class="due-input" data-id="${i.id}"
@@ -608,6 +724,205 @@ function renderManage() {
       <span class="grow">${escapeHtml(s.number)}번 ${escapeHtml(s.name)}</span>
       <button class="btn danger" data-action="del-student" data-id="${s.id}">삭제</button>
     </li>`).join('') : '<li class="empty">학생을 추가해 주세요.</li>';
+
+  // 자격증 + 급수별 특권 편집
+  $('#cert-manage-list').innerHTML = state.certs.length ? state.certs.map((c) => {
+    const filled = LEVELS.filter((lv) => (c.privileges?.[lv] || '').trim()).length;
+    const rows = LEVELS.map((lv) => `
+      <li>
+        <span class="lv-tag lv-${lv}">${lv}급</span>
+        <input type="text" class="priv-input" data-id="${c.id}" data-level="${lv}"
+               value="${escapeHtml(c.privileges?.[lv] || '')}"
+               placeholder="${lv === START_LEVEL ? '시작 급수 · 특권 없이 두어도 됩니다' : '이 급수에서 얻는 특권'}" />
+      </li>`).join('');
+    return `
+      <details class="cert-block">
+        <summary>
+          <span class="cert-name">${escapeHtml(c.name)}</span>
+          <span class="badge-muted">특권 ${filled}개</span>
+          <button class="btn danger" data-action="del-cert" data-id="${c.id}">삭제</button>
+        </summary>
+        <ul class="priv-list">${rows}</ul>
+      </details>`;
+  }).join('') : '<p class="empty">자격증을 추가해 주세요. (예: 독서 자격증, 구구단 자격증)</p>';
+}
+
+/* ═══════════ 자격증 ═══════════ */
+function initCertUI() {
+  $('#cert-table').addEventListener('change', async (e) => {
+    const sel = e.target.closest('select[data-cert]');
+    if (!sel) return;
+    const { cert: certId, student: studentId } = sel.dataset;
+    const level = Number(sel.value);
+    const student = state.students.find((s) => s.id === studentId);
+    const cert = state.certs.find((c) => c.id === certId);
+    await setDoc(doc(db, 'certAwards', awardId(certId, studentId)), {
+      certId, studentId, level, updatedAt: serverTimestamp()
+    });
+    toast(`${student?.name} · ${cert?.name} ${level}급`);
+  });
+}
+
+function renderCerts() {
+  const table = $('#cert-table');
+  const empty = $('#cert-empty');
+
+  if (!state.students.length || !state.certs.length) {
+    table.innerHTML = '';
+    empty.hidden = false;
+    empty.innerHTML = !state.students.length
+      ? '먼저 <strong>항목 관리</strong> 탭에서 학생 명단을 등록해 주세요.'
+      : '<strong>항목 관리</strong> 탭에서 자격증을 먼저 만들어 주세요.';
+    $('#cert-privileges').innerHTML = '';
+    return;
+  }
+  empty.hidden = true;
+
+  const head = state.certs.map((c) => `
+    <th class="col-head">
+      <span class="type-tag cert">자격증</span>
+      <span class="title">${escapeHtml(c.name)}</span>
+    </th>`).join('');
+
+  const body = state.students.map((s) => {
+    const cells = state.certs.map((c) => {
+      const level = levelOf(c.id, s.id);
+      const opts = LEVELS.map((lv) =>
+        `<option value="${lv}" ${lv === level ? 'selected' : ''}>${lv}급</option>`).join('');
+      return `<td class="lv-cell">
+        <select class="lv-select lv-${level}" data-cert="${c.id}" data-student="${s.id}">${opts}</select>
+      </td>`;
+    }).join('');
+    return `<tr><td class="col-student">${escapeHtml(s.number)}번 ${escapeHtml(s.name)}</td>${cells}</tr>`;
+  }).join('');
+
+  table.innerHTML = `
+    <thead><tr><th class="col-student">학생</th>${head}</tr></thead>
+    <tbody>${body}</tbody>`;
+
+  // 급수별 특권 안내
+  $('#cert-privileges').innerHTML = state.certs.map((c) => {
+    const rows = LEVELS.filter((lv) => (c.privileges?.[lv] || '').trim()).map((lv) => {
+      const holders = state.students.filter((s) => levelOf(c.id, s.id) === lv);
+      return `<li>
+        <span class="lv-tag lv-${lv}">${lv}급</span>
+        <span class="grow">${escapeHtml(c.privileges[lv])}</span>
+        <span class="meta">${holders.length ? `${holders.map((s) => escapeHtml(s.name)).join(', ')}` : '해당 없음'}</span>
+      </li>`;
+    }).join('');
+    return `
+      <div class="priv-group">
+        <div class="list-head">${escapeHtml(c.name)}</div>
+        <ul class="item-list">${rows || '<li class="empty">아직 등록된 특권이 없습니다.</li>'}</ul>
+      </div>`;
+  }).join('');
+}
+
+/* ═══════════ 신용도 점수표 ═══════════ */
+function initCreditUI() {
+  $('#credit-base').value = state.baseScore;
+
+  $('#adj-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const studentId = $('#adj-student').value;
+    const points = Number($('#adj-points').value);
+    const reason = $('#adj-reason').value.trim();
+    if (!studentId || !reason || !Number.isFinite(points) || points === 0) {
+      toast('학생 · 점수 · 사유를 모두 입력해 주세요.', 'error');
+      return;
+    }
+    await addDoc(col.adjustments, {
+      studentId, points, reason, date: todayStr(), createdAt: serverTimestamp()
+    });
+    $('#adj-points').value = '';
+    $('#adj-reason').value = '';
+    toast(`${points > 0 ? '+' : ''}${points}점을 반영했습니다.`);
+  });
+
+  // 학생 행을 누르면 점수 내역 펼치기
+  $('#credit-table').addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-student]');
+    if (!row) return;
+    const detail = row.nextElementSibling;
+    if (detail?.classList.contains('detail-row')) detail.hidden = !detail.hidden;
+  });
+
+  $('#credit-csv').addEventListener('click', downloadCreditCsv);
+}
+
+function renderCredit() {
+  const table = $('#credit-table');
+
+  // 가감점 학생 선택
+  const sel = $('#adj-student');
+  const keep = sel.value;
+  sel.innerHTML = ['<option value="">학생 선택</option>']
+    .concat(state.students.map((s) =>
+      `<option value="${s.id}">${escapeHtml(s.number)}번 ${escapeHtml(s.name)}</option>`)).join('');
+  if (keep) sel.value = keep;
+
+  // 가감점 목록
+  $('#adj-list').innerHTML = state.adjustments.length ? state.adjustments.slice(0, 12).map((a) => {
+    const student = state.students.find((s) => s.id === a.studentId);
+    return `<li>
+      <span class="badge-muted">${shortDate(a.date)}</span>
+      <span class="pt ${a.points > 0 ? 'plus' : 'minus'}">${a.points > 0 ? '+' : '−'}${Math.abs(a.points)}</span>
+      <span class="grow">${escapeHtml(student ? `${student.number}번 ${student.name}` : '(삭제된 학생)')} · ${escapeHtml(a.reason)}</span>
+      <button class="btn danger" data-action="del-adj" data-id="${a.id}">취소</button>
+    </li>`;
+  }).join('') : '<li class="empty">수동으로 조정한 기록이 없습니다.</li>';
+
+  if (!state.students.length) {
+    table.innerHTML = '';
+    return;
+  }
+
+  const rows = state.students.map((s) => ({ student: s, ...scoreOf(s.id) }));
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th class="col-student">학생</th>
+        <th>기준</th><th>획득</th><th>감점</th><th>총점</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(({ student, plus, minus, total, events }) => `
+        <tr data-student="${student.id}">
+          <td class="col-student">${escapeHtml(student.number)}번 ${escapeHtml(student.name)}</td>
+          <td class="num">${state.baseScore}</td>
+          <td class="num pt plus">+${plus}</td>
+          <td class="num pt minus">${minus === 0 ? '0' : `−${Math.abs(minus)}`}</td>
+          <td class="num total ${total >= state.baseScore ? 'up' : 'down'}">${total}</td>
+          <td class="meta">내역 ${events.length}건 ▾</td>
+        </tr>
+        <tr class="detail-row" hidden>
+          <td colspan="6">
+            ${events.length ? `<ul class="event-list">${events.slice(0, 40).map((ev) => `
+              <li>
+                <span class="badge-muted">${ev.date ? shortDate(ev.date) : '–'}</span>
+                <span class="pt ${ev.points > 0 ? 'plus' : 'minus'}">${ev.points > 0 ? '+' : '−'}${Math.abs(ev.points)}</span>
+                <span class="grow">${escapeHtml(ev.reason)}</span>
+              </li>`).join('')}</ul>` : '<p class="empty">아직 점수에 반영된 일이 없습니다.</p>'}
+          </td>
+        </tr>`).join('')}
+    </tbody>`;
+}
+
+function downloadCreditCsv() {
+  if (!state.students.length) { toast('내보낼 데이터가 없습니다.', 'error'); return; }
+  const header = ['번호', '이름', '기준 점수', '획득', '감점', '총점'];
+  const lines = [header.join(',')].concat(state.students.map((s) => {
+    const { plus, minus, total } = scoreOf(s.id);
+    return [s.number, s.name, state.baseScore, plus, minus, total].join(',');
+  }));
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `신용도_점수표_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('신용도 점수표를 내려받았습니다.');
 }
 
 /* ═══════════ 통계 ═══════════ */
