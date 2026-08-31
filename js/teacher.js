@@ -97,9 +97,19 @@ const homeworkOn = (date) =>
   state.items.filter((i) => i.type === TYPE.HOMEWORK && i.date === date)
     .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
 
+/** 진행 중인 통신문 – 마감이 임박한 순서로 정렬 (마감일 없으면 뒤로) */
 const openNotices = () =>
   state.items.filter((i) => i.type === TYPE.NOTICE && !i.closed)
-    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    .sort((a, b) =>
+      (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') ||
+      (a.date || '').localeCompare(b.date || ''));
+
+/** 마감일이 지났는데 아직 마감 처리하지 않은 통신문 */
+const isOverdue = (item) => !item.closed && !!item.dueDate && item.dueDate < todayStr();
+
+/** '배부 8/29 · 마감 9/5' */
+const noticeMeta = (item) =>
+  `배부 ${shortDate(item.date)}${item.dueDate ? ` · 마감 ${shortDate(item.dueDate)}` : ''}`;
 
 const dutiesOf = (week) => state.items.filter((i) => i.type === TYPE.DUTY && i.week === week);
 
@@ -240,7 +250,11 @@ function renderHome() {
   state.students.forEach((s) => {
     const missing = [];
     hw.forEach((i) => { if (!isDone(i.id, s.id)) missing.push(`📘 ${i.title}`); });
-    nt.forEach((i) => { if (!isDone(i.id, s.id)) missing.push(`📄 ${i.title}`); });
+    nt.forEach((i) => {
+      if (isDone(i.id, s.id)) return;
+      const due = isOverdue(i) ? ' (마감 지남)' : i.dueDate ? ` (마감 ${shortDate(i.dueDate)})` : '';
+      missing.push(`📄 ${i.title}${due}`);
+    });
     const duty = dutyOfStudent(s.id, week);
     if (duty && !isDone(duty.id, s.id)) missing.push(`🧹 ${duty.roleName}`);
     (missing.length ? pending : complete).push({ student: s, missing });
@@ -285,7 +299,9 @@ function buildColumns() {
 
   openNotices().forEach((item) => cols.push({
     key: item.id, type: TYPE.NOTICE, title: item.title,
-    meta: `배부 ${shortDate(item.date)}`, itemFor: () => item
+    meta: isOverdue(item) ? `${noticeMeta(item)} · 지남` : noticeMeta(item),
+    metaClass: isOverdue(item) ? 'overdue' : '',
+    itemFor: () => item
   }));
 
   if (dutiesOf(week).length) {
@@ -315,7 +331,7 @@ function renderCheck() {
     <th class="col-head">
       <span class="type-tag ${c.type}">${TYPE_LABEL[c.type]}</span>
       <span class="title">${escapeHtml(c.title)}</span>
-      <span class="meta">${escapeHtml(c.meta)}</span>
+      <span class="meta ${c.metaClass || ''}">${escapeHtml(c.meta)}</span>
       <button class="all-btn" type="button" data-col="${idx}">모두 토글</button>
     </th>`).join('');
 
@@ -398,9 +414,14 @@ function initManageUI() {
     e.preventDefault();
     const title = $('#nt-title').value.trim();
     const date = $('#nt-date').value;
+    const dueDate = $('#nt-due').value || null;
     if (!title || !date) return;
-    await addDoc(col.items, { type: TYPE.NOTICE, title, date, closed: false, createdAt: serverTimestamp() });
+    if (dueDate && dueDate < date) { toast('마감일이 배부일보다 빠릅니다.', 'error'); return; }
+    await addDoc(col.items, {
+      type: TYPE.NOTICE, title, date, dueDate, closed: false, createdAt: serverTimestamp()
+    });
     $('#nt-title').value = '';
+    $('#nt-due').value = '';
     toast('가정통신문을 등록했습니다.');
   });
 
@@ -471,6 +492,21 @@ function initManageUI() {
     }
   });
 
+  // 가정통신문 마감일 변경 (목록에서 바로 수정)
+  $('#nt-list').addEventListener('change', async (e) => {
+    const input = e.target.closest('.due-input');
+    if (!input) return;
+    const item = state.items.find((i) => i.id === input.dataset.id);
+    const value = input.value || null;
+    if (value && item && value < item.date) {
+      toast('마감일이 배부일보다 빠릅니다.', 'error');
+      input.value = item.dueDate || '';
+      return;
+    }
+    await updateDoc(doc(db, 'items', input.dataset.id), { dueDate: value });
+    toast(value ? `마감일을 ${shortDate(value)}로 정했습니다.` : '마감일을 지웠습니다.');
+  });
+
   // 1인 1역 배정 변경
   $('#duty-assign').addEventListener('change', async (e) => {
     const sel = e.target.closest('select[data-student]');
@@ -522,15 +558,28 @@ function renderManage() {
   // 가정통신문 목록
   const nt = state.items.filter((i) => i.type === TYPE.NOTICE)
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  $('#nt-list').innerHTML = nt.length ? nt.map((i) => `
-    <li>
-      <span class="state-tag ${i.closed ? 'closed' : 'open'}">${i.closed ? '마감' : '진행중'}</span>
-      <span class="grow">${escapeHtml(i.title)}<span class="meta"> · 배부 ${shortDate(i.date)}</span></span>
-      <button class="btn ghost small" data-action="toggle-notice" data-id="${i.id}" data-closed="${!!i.closed}">
-        ${i.closed ? '다시 열기' : '마감'}
-      </button>
-      <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
-    </li>`).join('') : '<li class="empty">등록된 통신문이 없습니다.</li>';
+  $('#nt-list').innerHTML = nt.length ? nt.map((i) => {
+    const over = isOverdue(i);
+    const tag = i.closed ? ['closed', '마감'] : over ? ['overdue', '지남'] : ['open', '진행중'];
+    return `
+    <li class="notice-item">
+      <div class="notice-top">
+        <span class="state-tag ${tag[0]}">${tag[1]}</span>
+        <span class="grow">${escapeHtml(i.title)}</span>
+      </div>
+      <div class="notice-bottom">
+        <span class="meta">배부 ${shortDate(i.date)}</span>
+        <label class="due-label">마감
+          <input type="date" class="due-input" data-id="${i.id}"
+                 value="${escapeHtml(i.dueDate || '')}" min="${escapeHtml(i.date || '')}" />
+        </label>
+        <button class="btn ghost small" data-action="toggle-notice" data-id="${i.id}" data-closed="${!!i.closed}">
+          ${i.closed ? '다시 열기' : '마감'}
+        </button>
+        <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
+      </div>
+    </li>`;
+  }).join('') : '<li class="empty">등록된 통신문이 없습니다.</li>';
 
   // 역할 목록
   $('#role-list').innerHTML = state.roles.length ? state.roles.map((r) => `

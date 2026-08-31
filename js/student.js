@@ -19,34 +19,35 @@ const state = {
   unsubChecks: null
 };
 
-warnIfUnconfigured(firebaseConfig);
+/* ─────────── 데이터 구독 ─────────── */
+function subscribe() {
+  // 학생 명단
+  onSnapshot(query(collection(db, 'students')), (snap) => {
+    state.students = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.number ?? 0) - (b.number ?? 0) || a.name.localeCompare(b.name, 'ko'));
+    renderPick();
 
-/* ─────────── 학생 명단 ─────────── */
-onSnapshot(query(collection(db, 'students')), (snap) => {
-  state.students = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .sort((a, b) => (a.number ?? 0) - (b.number ?? 0) || a.name.localeCompare(b.name, 'ko'));
-  renderPick();
+    const saved = localStorage.getItem(PICK_KEY);
+    if (!state.me && saved && state.students.some((s) => s.id === saved)) {
+      selectStudent(saved);
+    } else if (state.me) {
+      state.me = state.students.find((s) => s.id === state.me.id) || null;
+      if (!state.me) backToPick();
+      else renderMe();
+    }
+  }, (err) => {
+    console.error(err);
+    $('#pick-list').innerHTML =
+      `<p class="empty">명단을 불러오지 못했습니다. (${escapeHtml(err.code || err.message)})</p>`;
+  });
 
-  const saved = localStorage.getItem(PICK_KEY);
-  if (!state.me && saved && state.students.some((s) => s.id === saved)) {
-    selectStudent(saved);
-  } else if (state.me) {
-    state.me = state.students.find((s) => s.id === state.me.id) || null;
-    if (!state.me) backToPick();
-    else renderMe();
-  }
-}, (err) => {
-  console.error(err);
-  $('#pick-list').innerHTML =
-    `<p class="empty">명단을 불러오지 못했습니다. (${escapeHtml(err.code || err.message)})</p>`;
-});
-
-/* ─────────── 항목 (전체 공용) ─────────── */
-onSnapshot(query(collection(db, 'items')), (snap) => {
-  state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  renderMe();
-}, (err) => console.error(err));
+  // 항목 (전체 공용)
+  onSnapshot(query(collection(db, 'items')), (snap) => {
+    state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderMe();
+  }, (err) => console.error(err));
+}
 
 /* ─────────── 화면 ─────────── */
 function renderPick() {
@@ -115,6 +116,16 @@ function row(item, text, subText) {
 
 const none = (msg) => `<li class="none">${escapeHtml(msg)}</li>`;
 
+/** 가정통신문 아래 줄: '배부 8/29 · 9/5까지' */
+function noticeSub(item) {
+  let text = `배부 ${shortDate(item.date)}`;
+  if (item.dueDate) {
+    text += ` · ${shortDate(item.dueDate)}까지`;
+    if (item.dueDate < todayStr() && !isDone(item.id)) text += ' (기한 지났어요)';
+  }
+  return text;
+}
+
 function renderMe() {
   if (!state.me) return;
   const today = todayStr();
@@ -127,7 +138,9 @@ function renderMe() {
     .filter((i) => i.type === TYPE.HOMEWORK && i.date === today);
   const notices = state.items
     .filter((i) => i.type === TYPE.NOTICE && !i.closed)
-    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    .sort((a, b) =>
+      (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') ||
+      (a.date || '').localeCompare(b.date || ''));
   const duty = state.items
     .find((i) => i.type === TYPE.DUTY && i.week === week && i.studentId === state.me.id);
 
@@ -136,7 +149,7 @@ function renderMe() {
     : none('오늘 등록된 숙제가 없어요.');
 
   $('#me-notice').innerHTML = notices.length
-    ? notices.map((i) => row(i, i.title, `배부 ${shortDate(i.date)}`)).join('')
+    ? notices.map((i) => row(i, i.title, noticeSub(i))).join('')
     : none('회수할 가정통신문이 없어요.');
 
   $('#me-duty').innerHTML = duty
@@ -157,3 +170,7 @@ function renderMe() {
     banner.textContent = `아직 ${todo}개 남았어요.`;
   }
 }
+
+/* ─────────── 시작 (선언이 모두 끝난 뒤 실행) ─────────── */
+warnIfUnconfigured(firebaseConfig);
+subscribe();

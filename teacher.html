@@ -122,7 +122,10 @@
               <label>제목
                 <input type="text" id="nt-title" placeholder="예) 현장체험학습 신청서" required />
               </label>
-              <label>배부일<input type="date" id="nt-date" required /></label>
+              <div class="row">
+                <label>배부일<input type="date" id="nt-date" required /></label>
+                <label>마감일 <span class="opt">선택</span><input type="date" id="nt-due" /></label>
+              </div>
               <button class="btn primary" type="submit">통신문 등록</button>
             </form>
             <div class="list-head">진행 중 / 마감</div>

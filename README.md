@@ -76,7 +76,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 1. 교사 화면 로그인 → **항목 관리** 탭
 2. **학생 명단**에 13명 등록 (`여러 명 한 번에 추가`로 `1 김민준` 형식 붙여넣기 가능)
 3. **1인 1역** 역할 목록 등록 → 이번 주 배정
-4. 매일 **숙제** 등록, 통신문이 나가면 **가정통신문** 등록
+4. 매일 **숙제** 등록, 통신문이 나가면 **가정통신문** 등록 (마감일은 선택 사항이며, 목록에서 나중에 바꿀 수 있습니다)
 5. **학생별 체크** 탭에서 칸을 눌러 O/X 토글
 6. 학생들은 `student.html` 에서 이름을 눌러 본인 현황 확인
 
@@ -86,7 +86,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 |---|---|---|
 | `students` | 자동 | `number`, `name`, `createdAt` |
 | `roles` | 자동 | `name`, `createdAt` — 1인 1역 역할 목록 |
-| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제·통신문), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
+| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(통신문 마감일, 선택), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
 | `checks` | `{itemId}__{studentId}` | `itemId`, `studentId`, `type`, `date`, `done`, `checkedAt` |
 
 - 문서 ID를 조합키로 고정해 **중복 체크 기록이 생기지 않습니다.**
