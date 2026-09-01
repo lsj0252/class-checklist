@@ -144,7 +144,19 @@ function backToPick() {
 
 const isDone = (itemId) => !!state.checks.get(checkId(itemId, state.me?.id))?.done;
 
+/** 선생님이 '해당없음'으로 표시한 항목 */
+const isNA = (itemId) => !!state.checks.get(checkId(itemId, state.me?.id))?.na;
+
 function row(item, text, subText) {
+  // 선생님이 '해당없음'으로 표시한 통신문은 내가 낼 필요가 없는 것
+  if (isNA(item.id)) {
+    return `
+      <li class="skip">
+        <span class="mark">➖</span>
+        <span class="text">${escapeHtml(text)}<span class="sub-text">나는 안 내도 되는 통신문이에요</span></span>
+        <span class="status">해당없음</span>
+      </li>`;
+  }
   const done = isDone(item.id);
   return `
     <li class="${done ? 'done' : 'todo'}">
@@ -200,7 +212,7 @@ function renderMe() {
   renderCredit();
 
   const all = [...homework, ...notices, ...(duty ? [duty] : [])];
-  const todo = all.filter((i) => !isDone(i.id)).length;
+  const todo = all.filter((i) => !isDone(i.id) && !isNA(i.id)).length;
   const banner = $('#me-banner');
   if (!all.length) {
     banner.className = 'me-banner';

@@ -88,6 +88,28 @@ export const TYPE_LABEL = {
   [TYPE.DUTY]: '1인 1역'
 };
 
+/* ── 체크 상태 ── */
+/**
+ * 체크는 세 가지 상태를 가진다.
+ * 가정통신문만 '해당없음'을 쓴다. 특정 학생에게만 나가는 통신문이 있어서,
+ * 안 낸 것(todo)과 낼 필요가 없는 것(na)을 구분해야 통계와 점수가 정확해진다.
+ */
+export const CHECK = { DONE: 'done', TODO: 'todo', NA: 'na' };
+
+/** 체크 문서에서 상태를 읽는다. na 필드가 없던 옛 문서도 그대로 동작한다 */
+export const checkStateOf = (check) =>
+  check?.na ? CHECK.NA : check?.done ? CHECK.DONE : CHECK.TODO;
+
+/** 칸을 눌렀을 때 다음 상태. 가정통신문만 해당없음까지 세 단계로 돈다 */
+export function nextCheckState(item, current) {
+  if (item.type !== TYPE.NOTICE) {
+    return current === CHECK.DONE ? CHECK.TODO : CHECK.DONE;
+  }
+  if (current === CHECK.TODO) return CHECK.DONE;
+  if (current === CHECK.DONE) return CHECK.NA;
+  return CHECK.TODO;
+}
+
 /** checks 문서 ID - 항목 × 학생 조합당 하나 (중복 생성 방지) */
 export function checkId(itemId, studentId) {
   return `${itemId}__${studentId}`;
@@ -158,6 +180,9 @@ export function creditEvents(ctx, studentId) {
     const done = !!check?.done;
     const on = stampDate(check?.checkedAt);   // 체크한 날짜 (아직 없으면 null)
     const due = dueOf(item);
+
+    // 이 학생에게 해당하지 않는 항목은 점수에 넣지 않는다
+    if (check?.na) return;
 
     // 숙제와 가정통신문은 규칙이 같다: 기한 내 +1, 지각 -2, 기한이 지난 미제출 -2
     if (item.type === TYPE.HOMEWORK || item.type === TYPE.NOTICE) {

@@ -95,7 +95,12 @@
             <button class="btn ghost small" id="check-today">오늘</button>
           </div>
         </div>
-        <p class="hint">칸을 클릭하면 <strong>O ↔ X</strong> 가 바뀝니다. 진행 중인 가정통신문과 이번 주 1인 1역은 날짜와 상관없이 항상 함께 표시됩니다.</p>
+        <p class="hint">
+          칸을 클릭하면 <strong>X → O</strong> 로 바뀝니다.
+          가정통신문은 한 번 더 누르면 <strong class="skip-hint">/ (해당없음)</strong> 이 되어,
+          그 학생에게는 나가지 않은 통신문으로 처리됩니다. 통계와 신용도 점수에서도 빠집니다.
+          진행 중인 가정통신문과 이번 주 1인 1역은 날짜와 상관없이 항상 함께 표시됩니다.
+        </p>
         <div class="table-wrap">
           <table id="check-table" class="check-table"></table>
         </div>

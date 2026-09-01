@@ -8,7 +8,7 @@ import {
   onSnapshot, query, writeBatch, serverTimestamp,
   $, $$, escapeHtml, toast, warnIfUnconfigured,
   todayStr, dateLabel, shortDate, addDays, weekStart, weekLabel, monthStart,
-  TYPE, TYPE_LABEL, checkId, awardId, rate,
+  TYPE, TYPE_LABEL, checkId, awardId, rate, CHECK, checkStateOf, nextCheckState,
   LEVELS, START_LEVEL, CREDIT, dueOf,
   levelOf as levelIn, creditScore
 } from './common.js';
@@ -168,6 +168,11 @@ const dutyOfStudent = (studentId, week) =>
 
 const isDone = (itemId, studentId) => !!state.checks.get(checkId(itemId, studentId))?.done;
 
+/** 이 학생에게는 해당하지 않는 항목 (가정통신문 전용) */
+const isNA = (itemId, studentId) => !!state.checks.get(checkId(itemId, studentId))?.na;
+
+const stateOf = (itemId, studentId) => checkStateOf(state.checks.get(checkId(itemId, studentId)));
+
 /** 항목의 기준 날짜 (숙제·통신문은 date, 1인 1역은 주 시작일) */
 const itemDate = (item) => item.date || item.week || '';
 
@@ -176,29 +181,25 @@ const levelOf = (certId, studentId) => levelIn(state.awards, certId, studentId);
 const scoreOf = (studentId) => creditScore(state, studentId);
 
 /* ─────────── 체크 쓰기 ─────────── */
-async function setCheck(item, studentId, done) {
-  const id = checkId(item.id, studentId);
-  await setDoc(doc(db, 'checks', id), {
-    itemId: item.id,
-    studentId,
-    type: item.type,
-    date: itemDate(item),
-    done,
-    checkedAt: serverTimestamp()
-  });
+/** 체크 문서 한 건의 내용. state 는 'done' | 'todo' | 'na' */
+const checkDoc = (item, studentId, checkState) => ({
+  itemId: item.id,
+  studentId,
+  type: item.type,
+  date: itemDate(item),
+  done: checkState === CHECK.DONE,
+  na: checkState === CHECK.NA,
+  checkedAt: serverTimestamp()
+});
+
+async function setCheck(item, studentId, checkState) {
+  await setDoc(doc(db, 'checks', checkId(item.id, studentId)), checkDoc(item, studentId, checkState));
 }
 
-async function setCheckMany(pairs, done) {
+async function setCheckMany(pairs, checkState) {
   const batch = writeBatch(db);
   pairs.forEach(({ item, studentId }) => {
-    batch.set(doc(db, 'checks', checkId(item.id, studentId)), {
-      itemId: item.id,
-      studentId,
-      type: item.type,
-      date: itemDate(item),
-      done,
-      checkedAt: serverTimestamp()
-    });
+    batch.set(doc(db, 'checks', checkId(item.id, studentId)), checkDoc(item, studentId, checkState));
   });
   await batch.commit();
 }
@@ -298,6 +299,7 @@ function renderHome() {
     items.forEach((item) => {
       const targets = forStudent ? [item.studentId] : state.students.map((s) => s.id);
       targets.filter(Boolean).forEach((sid) => {
+        if (isNA(item.id, sid)) return;   // 해당없음은 분모에서 뺀다
         total++;
         if (isDone(item.id, sid)) done++;
       });
@@ -323,7 +325,7 @@ function renderHome() {
     const missing = [];
     hw.forEach((i) => { if (!isDone(i.id, s.id)) missing.push(`📘 ${i.title}`); });
     nt.forEach((i) => {
-      if (isDone(i.id, s.id)) return;
+      if (isDone(i.id, s.id) || isNA(i.id, s.id)) return;
       const due = isOverdue(i) ? ' (마감 지남)' : i.dueDate ? ` (마감 ${shortDate(i.dueDate)})` : '';
       missing.push(`📄 ${i.title}${due}`);
     });
@@ -425,23 +427,28 @@ function renderCheck() {
     const cells = cols.map((c, idx) => {
       const item = c.itemFor(s);
       if (!item) return '<td class="cell na">-</td>';
-      const done = isDone(item.id, s.id);
-      const label = c.type === TYPE.DUTY ? `${item.roleName}` : '';
-      return `<td class="cell ${done ? 'done' : 'todo'}" data-col="${idx}" data-student="${s.id}"
-               title="${escapeHtml(label)}">${done ? 'O' : 'X'}</td>`;
+      const cs = stateOf(item.id, s.id);
+      const face = { [CHECK.DONE]: ['done', 'O', '회수 완료'],
+                     [CHECK.TODO]: ['todo', 'X', '아직'],
+                     [CHECK.NA]: ['skip', '/', '해당없음'] }[cs];
+      const label = c.type === TYPE.DUTY ? item.roleName : face[2];
+      return `<td class="cell ${face[0]}" data-col="${idx}" data-student="${s.id}"
+               title="${escapeHtml(label)}">${face[1]}</td>`;
     }).join('');
     return `<tr><td class="col-student">${escapeHtml(s.number)}번 ${escapeHtml(s.name)}</td>${cells}</tr>`;
   }).join('');
 
   const foot = cols.map((c) => {
     let done = 0, total = 0;
+    let skipped = 0;
     state.students.forEach((s) => {
       const item = c.itemFor(s);
       if (!item) return;
+      if (isNA(item.id, s.id)) { skipped++; return; }
       total++;
       if (isDone(item.id, s.id)) done++;
     });
-    return `<td>${done} / ${total}</td>`;
+    return `<td>${done} / ${total}${skipped ? `<span class="meta"> 해당없음 ${skipped}</span>` : ''}</td>`;
   }).join('');
 
   table.innerHTML = `
@@ -458,11 +465,13 @@ async function onCheckTableClick(e) {
   const allBtn = e.target.closest('.all-btn');
   if (allBtn) {
     const c = cols[Number(allBtn.dataset.col)];
+    // 해당없음으로 표시해 둔 칸은 교사가 일부러 지정한 것이므로 건드리지 않는다
     const pairs = state.students
       .map((s) => ({ item: c.itemFor(s), studentId: s.id }))
-      .filter((p) => p.item);
+      .filter((p) => p.item && !isNA(p.item.id, p.studentId));
+    if (!pairs.length) { toast('바꿀 칸이 없습니다.', 'error'); return; }
     const allDone = pairs.every((p) => isDone(p.item.id, p.studentId));
-    await setCheckMany(pairs, !allDone);
+    await setCheckMany(pairs, allDone ? CHECK.TODO : CHECK.DONE);
     toast(allDone ? '모두 미완료로 바꿨습니다.' : '모두 완료로 바꿨습니다.');
     return;
   }
@@ -473,7 +482,9 @@ async function onCheckTableClick(e) {
   const student = state.students.find((s) => s.id === cell.dataset.student);
   const item = c?.itemFor(student);
   if (!item) return;
-  await setCheck(item, student.id, !isDone(item.id, student.id));
+  const next = nextCheckState(item, stateOf(item.id, student.id));
+  await setCheck(item, student.id, next);
+  if (next === CHECK.NA) toast(`${student.name} · 해당없음으로 표시했습니다.`);
 }
 
 /* ═══════════ 항목 관리 ═══════════ */
@@ -1004,10 +1015,15 @@ function computeStats() {
   const duties = state.items.filter((i) => i.type === TYPE.DUTY && inRange(i.week));
 
   return state.students.map((s) => {
+    // 해당없음으로 표시한 항목은 분모에서 뺀다
     const count = (items) => {
-      let done = 0;
-      items.forEach((i) => { if (isDone(i.id, s.id)) done++; });
-      return { done, total: items.length };
+      let done = 0, total = 0;
+      items.forEach((i) => {
+        if (isNA(i.id, s.id)) return;
+        total++;
+        if (isDone(i.id, s.id)) done++;
+      });
+      return { done, total };
     };
     const hw = count(homework);
     const nt = count(notices);

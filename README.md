@@ -77,7 +77,11 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 2. **학생 명단**에 13명 등록 (`여러 명 한 번에 추가`로 `1 김민준` 형식 붙여넣기 가능)
 3. **1인 1역** 역할 목록 등록 → 이번 주 배정
 4. 매일 **숙제** 등록, 통신문이 나가면 **가정통신문** 등록 (마감일은 선택 사항이며, 목록에서 나중에 바꿀 수 있습니다)
-5. **학생별 체크** 탭에서 칸을 눌러 O/X 토글
+5. **학생별 체크** 탭에서 칸을 눌러 체크
+   - 숙제 · 1인 1역: `X` ↔ `O`
+   - 가정통신문: `X` → `O` → `/` (해당없음) → `X`
+     특정 학생에게만 나가는 통신문이면 나머지 학생을 `/` 로 두세요.
+     통계 분모와 신용도 점수에서 함께 빠집니다.
 6. 학생들은 `student.html` 에서 이름을 눌러 본인 현황 확인
 
 ## 데이터 구조 (Firestore)
@@ -91,7 +95,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 | `settings` | `credit` | `baseScore` - 신용도 기준 점수 (기본 100) |
 | `roles` | 자동 | `name`, `createdAt` - 1인 1역 역할 목록 |
 | `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(마감일 · 선택 - 숙제는 비우면 숙제 당일이 마감), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
-| `checks` | `{itemId}__{studentId}` | `itemId`, `studentId`, `type`, `date`, `done`, `checkedAt` |
+| `checks` | `{itemId}__{studentId}` | `itemId`, `studentId`, `type`, `date`, `done`, `na`(해당없음 · 가정통신문 전용), `checkedAt` |
 
 - 문서 ID를 조합키로 고정해 **중복 체크 기록이 생기지 않습니다.**
 - `checks.checkedAt` 에 서버 타임스탬프를 남기고 `date` 를 함께 복사해 두어, 통계 탭에서 기간별 집계가 가능합니다.
@@ -124,6 +128,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 
 - 판정 기준은 **체크한 시각**(`checks.checkedAt`)입니다. 며칠 뒤 몰아서 체크하면 늦게 낸 것으로 잡히니, 그럴 때는 **수동 가감점**으로 조정하세요.
 - 숙제는 마감일을 비워 두면 **숙제 당일**이 마감일입니다. 그날 안에 체크하지 않으면 다음 날부터 미제출로 −2가 됩니다.
+- **해당없음(`/`)으로 표시한 가정통신문은 점수에 전혀 반영되지 않습니다.** 통계 분모에서도 빠집니다.
 - 학생 행을 누르면 점수가 어떻게 계산됐는지 항목별 내역이 펼쳐집니다. 학생 화면에도 같은 내역이 보입니다.
 
 ## 학기 정리
