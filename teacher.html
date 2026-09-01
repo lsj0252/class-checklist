@@ -110,6 +110,7 @@
       <!-- 항목 관리 -->
       <section id="tab-manage" class="tab-panel">
         <div class="panel-head"><h2>항목 관리</h2></div>
+        <p class="hint">마감일이 지나고 하루(24시간)가 더 지나면 목록에서 자동으로 빠져 <strong>통계</strong> 탭의 보관함으로 옮겨집니다. 기록은 사라지지 않으며, 필요하면 그곳에서 다시 되살릴 수 있어요.</p>
 
         <div class="manage-grid">
           <div class="card">
@@ -172,22 +173,6 @@
           </div>
 
           <div class="card wide">
-            <div class="card-head"><h3>🧒 학생 명단</h3></div>
-            <form id="st-form" class="row tight">
-              <input type="number" id="st-number" placeholder="번호" min="1" class="num-input" required />
-              <input type="text" id="st-name" placeholder="이름" required />
-              <button class="btn primary small" type="submit">추가</button>
-            </form>
-            <details class="bulk">
-              <summary>여러 명 한 번에 추가</summary>
-              <p class="hint">한 줄에 <code>번호 이름</code> 형식으로 입력하세요. (예: <code>1 김민준</code>)</p>
-              <textarea id="st-bulk" rows="5" placeholder="1 김민준"></textarea>
-              <button class="btn primary small" id="st-bulk-btn" type="button">일괄 추가</button>
-            </details>
-            <ul id="st-list" class="item-list student-list"></ul>
-          </div>
-
-          <div class="card wide">
             <div class="card-head">
               <h3>🏅 자격증 · 급수별 특권</h3>
               <span class="hint">자격증을 만들고, 급수마다 어떤 특권을 주는지 적어 두세요. 비워 둔 급수는 특권 없이 넘어갑니다.</span>
@@ -206,6 +191,22 @@
                 <input type="number" id="credit-base" class="num-input" step="1" />
               </label>
             </div>
+          </div>
+
+          <div class="card wide">
+            <div class="card-head"><h3>🧒 학생 명단</h3></div>
+            <form id="st-form" class="row tight">
+              <input type="number" id="st-number" placeholder="번호" min="1" class="num-input" required />
+              <input type="text" id="st-name" placeholder="이름" required />
+              <button class="btn primary small" type="submit">추가</button>
+            </form>
+            <details class="bulk">
+              <summary>여러 명 한 번에 추가</summary>
+              <p class="hint">한 줄에 <code>번호 이름</code> 형식으로 입력하세요. (예: <code>1 김민준</code>)</p>
+              <textarea id="st-bulk" rows="5" placeholder="1 김민준"></textarea>
+              <button class="btn primary small" id="st-bulk-btn" type="button">일괄 추가</button>
+            </details>
+            <ul id="st-list" class="item-list student-list"></ul>
           </div>
         </div>
       </section>
@@ -233,6 +234,14 @@
         <div id="stat-period" class="badge-muted"></div>
         <div class="table-wrap">
           <table id="stat-table" class="stat-table"></table>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>🗄️ 보관함</h3>
+            <span class="hint">마감 후 하루가 지나 자동으로 보관된 숙제·가정통신문입니다. 통계에는 그대로 반영됩니다.</span>
+          </div>
+          <ul id="archive-list" class="item-list"></ul>
         </div>
       </section>
 

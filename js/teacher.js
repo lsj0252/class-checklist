@@ -94,6 +94,7 @@ function subscribe() {
     state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     state.loaded.items = true;
     renderAll();
+    sweepArchive();
   }, onError('항목'));
 
   onSnapshot(query(col.roles), (snap) => {
@@ -153,6 +154,14 @@ const openNotices = () =>
 /** 마감일이 지났는데 아직 마감 처리하지 않은 항목 */
 const isOverdue = (item) => !item.closed && !!dueOf(item) && dueOf(item) < todayStr();
 
+/** 마감일이 지나고 하루(24시간)가 더 지나면 보관 대상 (숙제·가정통신문만 해당) */
+const isPastArchiveThreshold = (item) => {
+  const due = dueOf(item);
+  return !!due && addDays(due, 1) < todayStr();
+};
+
+const isArchived = (item) => item.archived === true;
+
 /** '배부 8/29 · 마감 9/5' */
 const noticeMeta = (item) =>
   `배부 ${shortDate(item.date)}${item.dueDate ? ` · 마감 ${shortDate(item.dueDate)}` : ''}`;
@@ -201,6 +210,20 @@ async function setCheckMany(pairs, checkState) {
   pairs.forEach(({ item, studentId }) => {
     batch.set(doc(db, 'checks', checkId(item.id, studentId)), checkDoc(item, studentId, checkState));
   });
+  await batch.commit();
+}
+
+/**
+ * 마감 후 하루가 지난 숙제·가정통신문을 자동으로 보관함(archived)으로 옮긴다.
+ * 교사가 직접 되살린(archived: false) 항목은 다시 자동으로 보관하지 않는다.
+ */
+async function sweepArchive() {
+  const targets = state.items.filter((i) =>
+    (i.type === TYPE.HOMEWORK || i.type === TYPE.NOTICE) &&
+    i.archived === undefined && isPastArchiveThreshold(i));
+  if (!targets.length) return;
+  const batch = writeBatch(db);
+  targets.forEach((i) => batch.update(doc(db, 'items', i.id), { archived: true }));
   await batch.commit();
 }
 
@@ -266,6 +289,7 @@ function renderAll() {
   renderCheck();
   renderManage();
   renderStats();
+  renderArchive();
   renderCerts();
   renderCredit();
 }
@@ -605,6 +629,14 @@ function initManageUI() {
       await deleteItem(id);
       toast('삭제했습니다.');
     }
+    if (action === 'archive-item') {
+      await updateDoc(doc(db, 'items', id), { archived: true });
+      toast('보관함으로 옮겼습니다. 통계 탭에서 볼 수 있어요.');
+    }
+    if (action === 'restore-item') {
+      await updateDoc(doc(db, 'items', id), { archived: false });
+      toast('항목 관리로 되살렸습니다.');
+    }
     if (action === 'toggle-notice') {
       await updateDoc(doc(db, 'items', id), { closed: btn.dataset.closed !== 'true' });
     }
@@ -695,8 +727,8 @@ async function copyLastWeekDuties() {
 }
 
 function renderManage() {
-  // 숙제 목록 (최근 15개)
-  const hw = state.items.filter((i) => i.type === TYPE.HOMEWORK)
+  // 숙제 목록 (보관되지 않은 것 중 최근 15개)
+  const hw = state.items.filter((i) => i.type === TYPE.HOMEWORK && !isArchived(i))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 15);
   $('#hw-list').innerHTML = hw.length ? hw.map((i) => `
@@ -711,12 +743,13 @@ function renderManage() {
                  value="${escapeHtml(i.dueDate || '')}" min="${escapeHtml(i.date || '')}" />
         </label>
         <span class="meta">${i.dueDate ? '' : '비우면 숙제 당일까지'}</span>
+        <button class="btn ghost small" data-action="archive-item" data-id="${i.id}">보관</button>
         <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
       </div>
     </li>`).join('') : '<li class="empty">등록된 숙제가 없습니다.</li>';
 
-  // 가정통신문 목록
-  const nt = state.items.filter((i) => i.type === TYPE.NOTICE)
+  // 가정통신문 목록 (보관되지 않은 것만)
+  const nt = state.items.filter((i) => i.type === TYPE.NOTICE && !isArchived(i))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   $('#nt-list').innerHTML = nt.length ? nt.map((i) => {
     const over = isOverdue(i);
@@ -736,6 +769,7 @@ function renderManage() {
         <button class="btn ghost small" data-action="toggle-notice" data-id="${i.id}" data-closed="${!!i.closed}">
           ${i.closed ? '다시 열기' : '마감'}
         </button>
+        <button class="btn ghost small" data-action="archive-item" data-id="${i.id}">보관</button>
         <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
       </div>
     </li>`;
@@ -1071,6 +1105,30 @@ function renderStats() {
           ${rateCell(r.hw)}${rateCell(r.nt)}${rateCell(r.dt)}${rateCell(r.all)}
         </tr>`).join('')}
     </tbody>`;
+}
+
+/** 보관함 - 마감 후 하루가 지나 항목 관리에서 자동으로 빠진 숙제·가정통신문 */
+function renderArchive() {
+  const box = $('#archive-list');
+  if (!box) return;
+  const items = state.items
+    .filter((i) => (i.type === TYPE.HOMEWORK || i.type === TYPE.NOTICE) && isArchived(i))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  box.innerHTML = items.length ? items.map((i) => {
+    const meta = i.type === TYPE.HOMEWORK ? homeworkMeta(i) : noticeMeta(i);
+    return `
+    <li class="dated-item">
+      <div class="dated-top">
+        <span class="type-tag ${i.type}">${TYPE_LABEL[i.type]}</span>
+        <span class="grow">${escapeHtml(i.title)}</span>
+      </div>
+      <div class="dated-bottom">
+        <span class="meta">${escapeHtml(meta)}</span>
+        <button class="btn ghost small" data-action="restore-item" data-id="${i.id}">항목 관리로 되살리기</button>
+        <button class="btn danger" data-action="del-item" data-id="${i.id}">삭제</button>
+      </div>
+    </li>`;
+  }).join('') : '<li class="empty">보관된 항목이 없습니다.</li>';
 }
 
 function downloadCsv() {

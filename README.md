@@ -94,7 +94,7 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 | `creditAdjustments` | 자동 | `studentId`, `points`(±), `reason`, `date` - 수동 가감점 |
 | `settings` | `credit` | `baseScore` - 신용도 기준 점수 (기본 100) |
 | `roles` | 자동 | `name`, `createdAt` - 1인 1역 역할 목록 |
-| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(마감일 · 선택 - 숙제는 비우면 숙제 당일이 마감), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `studentId`·`roleId`·`roleName`(1인 1역) |
+| `items` | 숙제·통신문은 자동 / 1인 1역은 `duty_{주시작일}_{학생ID}` | `type`(`homework`\|`notice`\|`duty`), `title`, `date`(숙제는 숙제일, 통신문은 배부일), `dueDate`(마감일 · 선택 - 숙제는 비우면 숙제 당일이 마감), `week`(1인 1역, 그 주 월요일), `closed`(통신문 마감 여부), `archived`(보관 여부 · 숙제·통신문만), `studentId`·`roleId`·`roleName`(1인 1역) |
 | `checks` | `{itemId}__{studentId}` | `itemId`, `studentId`, `type`, `date`, `done`, `na`(해당없음 · 가정통신문 전용), `checkedAt` |
 
 - 문서 ID를 조합키로 고정해 **중복 체크 기록이 생기지 않습니다.**
@@ -107,6 +107,9 @@ GitHub 저장소 → **Settings → Pages → Source: Deploy from a branch → m
 - 학생별 숙제 제출률 · 통신문 회수율 · 1인 1역 완료율 · 종합
 - 90% 이상 초록, 70% 이상 주황, 그 미만 빨강으로 표시
 - **CSV 내려받기** 로 엑셀에서 열어 생활기록부 작성 참고자료로 쓸 수 있습니다.
+- **보관함**: 마감일이 지나고 하루(24시간)가 더 지난 숙제·가정통신문은 **항목 관리** 목록에서 자동으로 빠져 이곳으로 옮겨집니다.
+  통계·신용도 점수 계산에는 그대로 반영되며, 필요하면 **항목 관리로 되살리기** 버튼으로 다시 항목 관리 목록에 꺼내 올 수 있습니다.
+  (한 번 되살린 항목은 자동으로 다시 보관되지 않습니다. 필요하면 **항목 관리** 목록에서 **보관** 버튼으로 직접 다시 옮길 수 있어요.)
 
 ## 자격증 탭
 
