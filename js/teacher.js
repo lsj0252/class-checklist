@@ -10,7 +10,7 @@ import {
   todayStr, dateLabel, shortDate, addDays, weekStart, weekLabel, monthStart,
   TYPE, TYPE_LABEL, checkId, awardId, rate, CHECK, checkStateOf, nextCheckState,
   LEVELS, START_LEVEL, CREDIT, dueOf,
-  levelOf as levelIn, creditScore
+  levelOf as levelIn, currentPrivilegeLevel, creditScore
 } from './common.js';
 import { firebaseConfig } from './firebase-config.js';
 
@@ -883,8 +883,9 @@ function renderCerts() {
 
   // 급수별 특권 안내
   $('#cert-privileges').innerHTML = state.certs.map((c) => {
+    // 자신의 급수와 정확히 같지 않아도, 이미 지나온 급수 중 가장 가까운 특권을 누리는 것으로 본다
     const rows = LEVELS.filter((lv) => (c.privileges?.[lv] || '').trim()).map((lv) => {
-      const holders = state.students.filter((s) => levelOf(c.id, s.id) === lv);
+      const holders = state.students.filter((s) => currentPrivilegeLevel(c, levelOf(c.id, s.id)) === lv);
       return `<li>
         <span class="lv-tag lv-${lv}">${lv}급</span>
         <span class="grow">${escapeHtml(c.privileges[lv])}</span>

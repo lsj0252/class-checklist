@@ -155,6 +155,17 @@ export function nextPrivilege(cert, level) {
   return { level: next, text: (cert.privileges?.[next] || '').trim() };
 }
 
+/**
+ * 지금 실제로 누리고 있는 특권의 급수 - 특권이 적힌 급수 중 자신의 급수와
+ * 가장 가까운(가장 최근에 도달한) 급수. 예: 1급·5급에만 특권이 있고 현재 3급이면
+ * 아직 1급은 못 땄지만 5급은 이미 지나왔으므로 5급 특권을 누리는 것으로 본다.
+ * 그런 급수가 없으면(가장 낮은 특권도 아직 못 딴 경우) null.
+ */
+export function currentPrivilegeLevel(cert, level) {
+  const earned = earnedPrivileges(cert, level);
+  return earned.length ? earned[earned.length - 1].level : null;
+}
+
 /* ── 신용도 점수 규칙 ── */
 export const CREDIT = {
   ON_TIME: 1,      // 숙제·가정통신문을 마감일까지 제출
