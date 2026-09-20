@@ -91,8 +91,9 @@ export const TYPE_LABEL = {
 /* ── 체크 상태 ── */
 /**
  * 체크는 세 가지 상태를 가진다.
- * 가정통신문만 '해당없음'을 쓴다. 특정 학생에게만 나가는 통신문이 있어서,
- * 안 낸 것(todo)과 낼 필요가 없는 것(na)을 구분해야 통계와 점수가 정확해진다.
+ * 숙제·가정통신문은 '해당없음'을 쓴다. 결석했거나 특정 학생에게만 나가는 통신문이 있어서,
+ * 안 한 것(todo)과 할 필요가 없는 것(na)을 구분해야 통계와 점수가 정확해진다.
+ * 1인 1역은 항상 배정된 학생 한 명의 일이라 두 단계만 쓴다.
  */
 export const CHECK = { DONE: 'done', TODO: 'todo', NA: 'na' };
 
@@ -100,9 +101,9 @@ export const CHECK = { DONE: 'done', TODO: 'todo', NA: 'na' };
 export const checkStateOf = (check) =>
   check?.na ? CHECK.NA : check?.done ? CHECK.DONE : CHECK.TODO;
 
-/** 칸을 눌렀을 때 다음 상태. 가정통신문만 해당없음까지 세 단계로 돈다 */
+/** 칸을 눌렀을 때 다음 상태. 숙제·가정통신문은 해당없음까지 세 단계로 돈다 */
 export function nextCheckState(item, current) {
-  if (item.type !== TYPE.NOTICE) {
+  if (item.type === TYPE.DUTY) {
     return current === CHECK.DONE ? CHECK.TODO : CHECK.DONE;
   }
   if (current === CHECK.TODO) return CHECK.DONE;

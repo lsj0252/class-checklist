@@ -393,7 +393,7 @@ tbody tr:hover td, tbody tr:hover td.col-student { background: var(--surface-2);
 .cell { cursor: pointer; user-select: none; font-weight: 700; font-size: 16px; }
 .cell.done { background: var(--ok-soft); color: var(--ok); }
 .cell.todo { background: var(--warn-soft); color: var(--warn); }
-/* 해당없음: 이 학생에게는 나가지 않은 통신문. 회색 사선으로 X와 확실히 구분한다 */
+/* 해당없음: 이 학생에게는 해당하지 않는 항목(결석 등). 회색 사선으로 X와 확실히 구분한다 */
 .cell.skip { background: var(--surface-2); color: var(--muted); font-weight: 600; }
 .cell.na { color: var(--line-strong); cursor: default; }
 .cell:not(.na):hover { filter: brightness(.96); }

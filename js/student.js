@@ -144,16 +144,21 @@ function backToPick() {
 
 const isDone = (itemId) => !!state.checks.get(checkId(itemId, state.me?.id))?.done;
 
-/** 선생님이 '해당없음'으로 표시한 항목 */
+/** 선생님이 '해당없음'으로 표시한 항목 (결석 등 - 숙제·가정통신문) */
 const isNA = (itemId) => !!state.checks.get(checkId(itemId, state.me?.id))?.na;
 
+const NA_SUB_TEXT = {
+  [TYPE.HOMEWORK]: '나는 안 해도 되는 숙제예요',
+  [TYPE.NOTICE]: '나는 안 내도 되는 통신문이에요'
+};
+
 function row(item, text, subText) {
-  // 선생님이 '해당없음'으로 표시한 통신문은 내가 낼 필요가 없는 것
+  // 선생님이 '해당없음'으로 표시한 항목은 내가 하지 않아도 되는 것 (결석 등)
   if (isNA(item.id)) {
     return `
       <li class="skip">
         <span class="mark">➖</span>
-        <span class="text">${escapeHtml(text)}<span class="sub-text">나는 안 내도 되는 통신문이에요</span></span>
+        <span class="text">${escapeHtml(text)}<span class="sub-text">${escapeHtml(NA_SUB_TEXT[item.type] || '해당하지 않아요')}</span></span>
         <span class="status">해당없음</span>
       </li>`;
   }

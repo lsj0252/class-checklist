@@ -177,7 +177,7 @@ const dutyOfStudent = (studentId, week) =>
 
 const isDone = (itemId, studentId) => !!state.checks.get(checkId(itemId, studentId))?.done;
 
-/** 이 학생에게는 해당하지 않는 항목 (가정통신문 전용) */
+/** 이 학생에게는 해당하지 않는 항목 (결석 등 - 숙제·가정통신문) */
 const isNA = (itemId, studentId) => !!state.checks.get(checkId(itemId, studentId))?.na;
 
 const stateOf = (itemId, studentId) => checkStateOf(state.checks.get(checkId(itemId, studentId)));
@@ -347,7 +347,10 @@ function renderHome() {
   const complete = [];
   state.students.forEach((s) => {
     const missing = [];
-    hw.forEach((i) => { if (!isDone(i.id, s.id)) missing.push(`📘 ${i.title}`); });
+    hw.forEach((i) => {
+      if (isDone(i.id, s.id) || isNA(i.id, s.id)) return;
+      missing.push(`📘 ${i.title}`);
+    });
     nt.forEach((i) => {
       if (isDone(i.id, s.id) || isNA(i.id, s.id)) return;
       const due = isOverdue(i) ? ' (마감 지남)' : i.dueDate ? ` (마감 ${shortDate(i.dueDate)})` : '';
