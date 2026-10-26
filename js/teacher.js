@@ -151,6 +151,17 @@ const openNotices = () =>
       (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') ||
       (a.date || '').localeCompare(b.date || ''));
 
+/** 학생별 체크 탭에 보일 숙제 - 숙제 날짜부터 마감일까지 (마감일이 없으면 숙제 당일만) */
+const homeworkVisibleOn = (date) =>
+  state.items.filter((i) => i.type === TYPE.HOMEWORK && i.date <= date && date <= dueOf(i))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+/** 마감일이 지났고 모든 학생이 회수 완료(또는 해당없음)라 더 체크할 것이 없는 통신문 */
+const isNoticeSettled = (item) =>
+  !!item.dueDate && item.dueDate < todayStr() &&
+  state.students.length > 0 &&
+  state.students.every((s) => stateOf(item.id, s.id) !== CHECK.TODO);
+
 /** 마감일이 지났는데 아직 마감 처리하지 않은 항목 */
 const isOverdue = (item) => !item.closed && !!dueOf(item) && dueOf(item) < todayStr();
 
@@ -393,14 +404,14 @@ function buildColumns() {
   const week = weekStart(date);
   const cols = [];
 
-  homeworkOn(date).forEach((item) => cols.push({
+  homeworkVisibleOn(date).forEach((item) => cols.push({
     key: item.id, type: TYPE.HOMEWORK, title: item.title,
     meta: isOverdue(item) ? `${homeworkMeta(item)} · 지남` : homeworkMeta(item),
     metaClass: isOverdue(item) ? 'overdue' : '',
     itemFor: () => item
   }));
 
-  openNotices().forEach((item) => cols.push({
+  openNotices().filter((item) => !isNoticeSettled(item)).forEach((item) => cols.push({
     key: item.id, type: TYPE.NOTICE, title: item.title,
     meta: isOverdue(item) ? `${noticeMeta(item)} · 지남` : noticeMeta(item),
     metaClass: isOverdue(item) ? 'overdue' : '',
