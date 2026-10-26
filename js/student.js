@@ -5,7 +5,7 @@ import {
   db, collection, doc, onSnapshot, query, where,
   $, escapeHtml, warnIfUnconfigured, toast,
   todayStr, dateLabel, shortDate, weekStart, weekLabel,
-  TYPE, checkId, CREDIT,
+  TYPE, checkId, CREDIT, dueOf,
   levelOf, earnedPrivileges, nextPrivilege, creditScore
 } from './common.js';
 import { firebaseConfig } from './firebase-config.js';
@@ -192,7 +192,8 @@ function renderMe() {
   $('#me-date').textContent = dateLabel(today);
 
   const homework = state.items
-    .filter((i) => i.type === TYPE.HOMEWORK && i.date === today);
+    .filter((i) => i.type === TYPE.HOMEWORK && i.date <= today && today <= dueOf(i))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const notices = state.items
     .filter((i) => i.type === TYPE.NOTICE && !i.closed)
     .sort((a, b) =>
@@ -203,7 +204,7 @@ function renderMe() {
 
   $('#me-homework').innerHTML = homework.length
     ? homework.map((i) => row(i, i.title)).join('')
-    : none('오늘 등록된 숙제가 없어요.');
+    : none('오늘 해야 할 숙제가 없어요.');
 
   $('#me-notice').innerHTML = notices.length
     ? notices.map((i) => row(i, i.title, noticeSub(i))).join('')

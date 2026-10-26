@@ -140,10 +140,6 @@ function subscribe() {
 }
 
 /* ─────────── 조회 헬퍼 ─────────── */
-const homeworkOn = (date) =>
-  state.items.filter((i) => i.type === TYPE.HOMEWORK && i.date === date)
-    .sort((a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0));
-
 /** 진행 중인 통신문 - 마감이 임박한 순서로 정렬 (마감일 없으면 뒤로) */
 const openNotices = () =>
   state.items.filter((i) => i.type === TYPE.NOTICE && !i.closed)
@@ -151,7 +147,7 @@ const openNotices = () =>
       (a.dueDate || '9999-12-31').localeCompare(b.dueDate || '9999-12-31') ||
       (a.date || '').localeCompare(b.date || ''));
 
-/** 학생별 체크 탭에 보일 숙제 - 숙제 날짜부터 마감일까지 (마감일이 없으면 숙제 당일만) */
+/** 해당 날짜에 해야 하는 숙제 (학생별 체크 · 홈 공용) - 숙제 날짜부터 마감일까지 (마감일이 없으면 숙제 당일만) */
 const homeworkVisibleOn = (date) =>
   state.items.filter((i) => i.type === TYPE.HOMEWORK && i.date <= date && date <= dueOf(i))
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -325,7 +321,7 @@ function renderHome() {
     return;
   }
 
-  const hw = homeworkOn(today);
+  const hw = homeworkVisibleOn(today);
   const nt = openNotices();
   const dt = dutiesOf(week);
 
@@ -349,7 +345,7 @@ function renderHome() {
     $(`#bar-${kind}`).style.width = `${r ?? 0}%`;
   };
 
-  paint('homework', tally(hw, false), '오늘 등록된 숙제 없음', `명 제출 · 항목 ${hw.length}개`);
+  paint('homework', tally(hw, false), '오늘 해야 할 숙제 없음', `명 제출 · 항목 ${hw.length}개`);
   paint('notice', tally(nt, false), '진행 중인 통신문 없음', `명 회수 · 통신문 ${nt.length}건`);
   paint('duty', tally(dt, true), '이번 주 배정 없음', `명 완료 (${weekLabel(week)})`);
 
